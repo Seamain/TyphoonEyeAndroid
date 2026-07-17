@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">台风眼</string>
+    <string name="app_tagline">西北太平洋台风实时监测</string>
+    <string name="refresh">刷新</string>
+    <string name="retry">重试</string>
+    <string name="back">返回</string>
+    <string name="demo_data">演示数据</string>
+    <string name="search_hint">搜索台风名称或编号</string>
+    <string name="active_count">活跃台风 %1$d 个</string>
+    <string name="no_active">当前西太平洋暂无活跃台风</string>
+    <string name="no_active_hint">下拉刷新，或加载演示数据预览界面</string>
+    <string name="load_demo">加载演示数据</string>
+    <string name="history_track">历史路径</string>
+    <string name="forecast_track">预报路径</string>
+    <string name="overview">概况</string>
+    <string name="track_map">路径图</string>
+    <string name="wind_speed">中心风速</string>
+    <string name="pressure">中心气压</string>
+    <string name="move">移动</string>
+    <string name="location">位置</string>
+    <string name="intensity">强度</string>
+    <string name="updated_at">更新于 %1$s</string>
+    <string name="forecast_bulletin">预报要点</string>
+    <string name="points_count">共 %1$d 个观测点</string>
+    <string name="forecast_points_count">%1$d 个预报点</string>
+    <string name="error_title">加载失败</string>
+    <string name="filter_all">全部</string>
+    <string name="share_summary">分享概况</string>
+    <string name="data_live">实时数据</string>
+    <string name="data_demo">演示模式</string>
+</resources>
