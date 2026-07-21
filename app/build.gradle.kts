@@ -13,6 +13,20 @@ val localProperties = Properties().apply {
     }
 }
 
+fun String.asBuildConfigLiteral(): String =
+    "\"" + replace("\\", "\\\\")
+        .replace("\"", "\\\"")
+        .replace("\n", "\\n")
+        .replace("\r", "") + "\""
+
+fun prop(name: String, vararg aliases: String): String {
+    val value = sequenceOf(name, *aliases)
+        .mapNotNull { localProperties.getProperty(it)?.takeIf(String::isNotBlank) }
+        .firstOrNull()
+        .orEmpty()
+    return value.asBuildConfigLiteral()
+}
+
 android {
     namespace = "seamain.org.typhoonEye"
     compileSdk = 36
@@ -26,15 +40,21 @@ android {
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
-        // Inject API keys from local.properties into BuildConfig (aligned with Postman Typhoon Eye collection)
-        buildConfigField("String", "JUHE_KEY", "\"${localProperties.getProperty("JUHE_KEY") ?: ""}\"")
-        buildConfigField("String", "QWEATHER_PUBLIC_ID", "\"${localProperties.getProperty("QWEATHER_PUBLIC_ID") ?: ""}\"")
-        buildConfigField("String", "QWEATHER_PROJECT_KEY", "\"${localProperties.getProperty("QWEATHER_PROJECT_KEY") ?: ""}\"")
-        // Postman {{api_host}} — QWeather dedicated API Host
+        // Inject API keys from local.properties (see local.properties.example)
+        buildConfigField("String", "JUHE_KEY", prop("JUHE_KEY"))
+        buildConfigField("String", "QWEATHER_API_KEY", prop("QWEATHER_API_KEY"))
+        buildConfigField("String", "QWEATHER_KID", prop("QWEATHER_KID", "QWEATHER_PUBLIC_ID"))
+        buildConfigField("String", "QWEATHER_PROJECT_ID", prop("QWEATHER_PROJECT_ID"))
+        buildConfigField(
+            "String",
+            "QWEATHER_PRIVATE_KEY",
+            prop("QWEATHER_PRIVATE_KEY", "QWEATHER_PROJECT_KEY")
+        )
         buildConfigField(
             "String",
             "QWEATHER_HOST",
-            "\"${localProperties.getProperty("QWEATHER_HOST") ?: "https://pu6yvrgfbv.re.qweatherapi.com/"}\""
+            (localProperties.getProperty("QWEATHER_HOST")?.takeIf { it.isNotBlank() }
+                ?: "https://pu6yvrgfbv.re.qweatherapi.com/").asBuildConfigLiteral()
         )
     }
 
@@ -58,6 +78,7 @@ android {
 
     testOptions {
         unitTests.isReturnDefaultValues = true
+        unitTests.isIncludeAndroidResources = true
     }
 }
 
@@ -87,16 +108,23 @@ dependencies {
     implementation(libs.okhttp.logging)
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.kotlinx.coroutines.android)
+    implementation(libs.eddsa)
 
     testImplementation(libs.junit)
     testImplementation("org.mockito:mockito-core:5.11.0")
     testImplementation("org.mockito.kotlin:mockito-kotlin:5.2.1")
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.9.0")
     testImplementation("org.json:json:20231013") // For testing JSON in unit tests
+    testImplementation("org.robolectric:robolectric:4.14.1")
+    testImplementation(platform(libs.androidx.compose.bom))
+    testImplementation(libs.androidx.compose.ui.test.junit4)
+    testImplementation(libs.androidx.compose.material3)
     androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)
+    androidTestImplementation(libs.androidx.compose.ui.test.manifest)
     androidTestImplementation(libs.androidx.espresso.core)
     androidTestImplementation(libs.androidx.junit)
+    androidTestImplementation(libs.androidx.activity.compose)
     debugImplementation(libs.androidx.compose.ui.test.manifest)
     debugImplementation(libs.androidx.compose.ui.tooling)
 }

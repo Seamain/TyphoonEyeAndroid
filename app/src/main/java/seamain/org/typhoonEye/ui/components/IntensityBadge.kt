@@ -14,9 +14,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import seamain.org.typhoonEye.ui.theme.SuccessGreen
 import seamain.org.typhoonEye.ui.util.IntensityLevel
 import seamain.org.typhoonEye.ui.util.intensityColor
 
@@ -55,7 +55,7 @@ fun StatusChip(
     active: Boolean,
     modifier: Modifier = Modifier
 ) {
-    val color = if (active) Color(0xFF2E7D32) else Color(0xFF78909C)
+    val color = if (active) SuccessGreen else MaterialTheme.colorScheme.outline
     val label = if (active) "活跃" else "已消散"
     Row(
         modifier = modifier

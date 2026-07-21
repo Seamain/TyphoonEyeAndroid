@@ -44,7 +44,7 @@ class MainActivity : ComponentActivity() {
             TyphoonEyeTheme {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
-                    color = MaterialTheme.colorScheme.background
+                    color = MaterialTheme.colorScheme.surfaceContainerLowest
                 ) {
                     TyphoonApp(viewModelFactory)
                 }
@@ -67,13 +67,15 @@ class MainActivity : ComponentActivity() {
             .addInterceptor(logging)
             .build()
 
+        val qWeatherAuth = QWeatherAuthInterceptor(
+            apiKey = BuildConfig.QWEATHER_API_KEY,
+            kid = BuildConfig.QWEATHER_KID,
+            projectId = BuildConfig.QWEATHER_PROJECT_ID,
+            privateKeyPem = BuildConfig.QWEATHER_PRIVATE_KEY
+        )
+
         val qWeatherClient = OkHttpClient.Builder()
-            .addInterceptor(
-                QWeatherAuthInterceptor(
-                    publicId = BuildConfig.QWEATHER_PUBLIC_ID,
-                    projectKey = BuildConfig.QWEATHER_PROJECT_KEY
-                )
-            )
+            .addInterceptor(qWeatherAuth)
             .addInterceptor(logging)
             .build()
 
@@ -96,7 +98,8 @@ class MainActivity : ComponentActivity() {
         return TyphoonRepository(
             juheApi = juheRetrofit.create(JuheTyphoonApi::class.java),
             qWeatherApi = qWeatherRetrofit.create(QWeatherTyphoonApi::class.java),
-            juheKey = BuildConfig.JUHE_KEY
+            juheKey = BuildConfig.JUHE_KEY,
+            qWeatherConfigured = qWeatherAuth.hasCredentials
         )
     }
 }

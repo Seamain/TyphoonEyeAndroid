@@ -11,17 +11,52 @@ import java.util.Calendar
 class TyphoonRepository(
     private val juheApi: JuheTyphoonApi,
     private val qWeatherApi: QWeatherTyphoonApi,
-    private val juheKey: String
+    private val juheKey: String,
+    private val qWeatherConfigured: Boolean = true
 ) {
     private val tag = "TyphoonRepository"
 
+    private class FetchOutcome(
+        val typhoons: List<Typhoon>? = null,
+        val error: String? = null
+    )
+
     /**
-     * 优先聚合数据；配额用尽或失败时回退和风天气。
+     * 优先聚合数据；KEY 无效 / 配额用尽 / 失败时回退和风天气。
      */
     suspend fun getActiveTyphoons(): Result<List<Typhoon>> {
-        fetchFromJuhe()?.let { return Result.success(it) }
-        fetchFromQWeather()?.let { return Result.success(it) }
-        return Result.failure(Exception("所有数据源均失败或达到调用限制"))
+        val errors = ArrayList<String>()
+
+        if (juheKey.isBlank()) {
+            errors.add("聚合 JUHE_KEY 未配置")
+        } else {
+            val juhe = fetchFromJuhe()
+            val data = juhe.typhoons
+            if (data != null) {
+                return Result.success(data)
+            }
+            juhe.error?.let { errors.add(it) }
+        }
+
+        if (!qWeatherConfigured) {
+            errors.add("和风凭证未配置（QWEATHER_API_KEY 或 JWT）")
+        } else {
+            val qWeather = fetchFromQWeather()
+            val data = qWeather.typhoons
+            if (data != null) {
+                return Result.success(data)
+            }
+            qWeather.error?.let { errors.add(it) }
+        }
+
+        val detail = if (errors.isEmpty()) {
+            "所有数据源均失败"
+        } else {
+            errors.joinToString("；")
+        }
+        return Result.failure(
+            Exception("$detail。请检查 local.properties（参考 local.properties.example），或使用演示数据")
+        )
     }
 
     /**
@@ -29,7 +64,7 @@ class TyphoonRepository(
      * [id] 可为聚合 tfid（如 202609）或和风 stormid（如 NP_2609）。
      */
     suspend fun getTyphoonDetail(id: String): Result<Typhoon> {
-        if (!id.startsWith("NP_")) {
+        if (!id.startsWith("NP_") && juheKey.isNotBlank()) {
             try {
                 val response = juheApi.getTyphoonDetail(juheKey, id)
                 if (response.errorCode == 0 && response.result?.data != null) {
@@ -39,6 +74,10 @@ class TyphoonRepository(
             } catch (e: Exception) {
                 Log.e(tag, "Juhe detail request failed", e)
             }
+        }
+
+        if (!qWeatherConfigured) {
+            return Result.failure(Exception("无法获取台风详情: $id（和风凭证未配置）"))
         }
 
         val stormId = if (id.startsWith("NP_")) id else "NP_${id.takeLast(4)}"
@@ -63,12 +102,13 @@ class TyphoonRepository(
             Log.e(tag, "QWeather track error code: ${track.code}")
         } catch (e: Exception) {
             Log.e(tag, "QWeather track request failed", e)
+            return Result.failure(Exception("无法获取台风详情: $id（${e.message}）"))
         }
 
         return Result.failure(Exception("无法获取台风详情: $id"))
     }
 
-    private suspend fun fetchFromJuhe(): List<Typhoon>? {
+    private suspend fun fetchFromJuhe(): FetchOutcome {
         return try {
             val listResponse = juheApi.getActiveTyphoons(juheKey)
             when (listResponse.errorCode) {
@@ -76,7 +116,7 @@ class TyphoonRepository(
                     val active = listResponse.result?.data.orEmpty()
                     if (active.isEmpty()) {
                         Log.d(tag, "Juhe: no active typhoons")
-                        return emptyList()
+                        return FetchOutcome(typhoons = emptyList())
                     }
                     val typhoons = active.map { info ->
                         try {
@@ -92,37 +132,44 @@ class TyphoonRepository(
                         }
                     }
                     Log.d(tag, "Fetched ${typhoons.size} typhoon(s) from Juhe")
-                    typhoons
+                    FetchOutcome(typhoons = typhoons)
+                }
+                10001, 10002 -> {
+                    val msg = "聚合 KEY 无效（${listResponse.errorCode}: ${listResponse.reason}）"
+                    Log.e(tag, msg)
+                    FetchOutcome(error = msg)
                 }
                 10012, 10013, 10022, 10023 -> {
-                    // 请求次数 / 日配额限制
-                    Log.w(tag, "Juhe quota exceeded (${listResponse.errorCode}), fallback to QWeather")
-                    null
+                    val msg = "聚合配额受限（${listResponse.errorCode}）"
+                    Log.w(tag, "$msg, fallback to QWeather")
+                    FetchOutcome(error = msg)
                 }
                 else -> {
-                    Log.e(tag, "Juhe error: ${listResponse.reason} (${listResponse.errorCode})")
-                    null
+                    val msg = "聚合错误（${listResponse.errorCode}: ${listResponse.reason}）"
+                    Log.e(tag, msg)
+                    FetchOutcome(error = msg)
                 }
             }
         } catch (e: Exception) {
             Log.e(tag, "Juhe request failed", e)
-            null
+            FetchOutcome(error = "聚合请求失败: ${e.message}")
         }
     }
 
-    private suspend fun fetchFromQWeather(): List<Typhoon>? {
+    private suspend fun fetchFromQWeather(): FetchOutcome {
         return try {
             val year = Calendar.getInstance().get(Calendar.YEAR).toString()
             val listResponse = qWeatherApi.getStormList(basin = "NP", year = year)
             if (listResponse.code != "200") {
-                Log.e(tag, "QWeather list error code: ${listResponse.code}")
-                return null
+                val msg = "和风列表错误 code=${listResponse.code}"
+                Log.e(tag, msg)
+                return FetchOutcome(error = msg)
             }
 
             val activeStorms = listResponse.storm.filter { it.isActive == "1" }
             if (activeStorms.isEmpty()) {
                 Log.d(tag, "QWeather: no active storms in $year")
-                return emptyList()
+                return FetchOutcome(typhoons = emptyList())
             }
 
             val typhoons = activeStorms.map { storm ->
@@ -135,10 +182,10 @@ class TyphoonRepository(
                 )
             }
             Log.d(tag, "Fetched ${typhoons.size} storm(s) from QWeather")
-            typhoons
+            FetchOutcome(typhoons = typhoons)
         } catch (e: Exception) {
             Log.e(tag, "QWeather request failed", e)
-            null
+            FetchOutcome(error = "和风请求失败: ${e.message}")
         }
     }
 }

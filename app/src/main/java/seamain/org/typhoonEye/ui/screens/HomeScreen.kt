@@ -1,9 +1,9 @@
 package seamain.org.typhoonEye.ui.screens
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -17,10 +17,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Air
 import androidx.compose.material.icons.filled.Clear
@@ -31,43 +30,52 @@ import androidx.compose.material.icons.filled.Science
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.outlined.Refresh
+import androidx.compose.material3.AssistChip
+import androidx.compose.material3.AssistChipDefaults
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LargeTopAppBar
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.OutlinedTextFieldDefaults
-import androidx.compose.material3.Surface
+import androidx.compose.material3.OutlinedCard
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SuggestionChip
+import androidx.compose.material3.SuggestionChipDefaults
 import androidx.compose.material3.Text
-import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults
-import androidx.compose.material3.pulltorefresh.pullToRefresh
+import androidx.compose.material3.TextField
+import androidx.compose.material3.TextFieldDefaults
+import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import seamain.org.typhoonEye.data.model.Typhoon
+import seamain.org.typhoonEye.data.model.TyphoonPoint
 import seamain.org.typhoonEye.ui.DataMode
 import seamain.org.typhoonEye.ui.TyphoonUiState
 import seamain.org.typhoonEye.ui.components.IntensityBadge
 import seamain.org.typhoonEye.ui.components.StatusChip
-import seamain.org.typhoonEye.ui.theme.Ocean
-import seamain.org.typhoonEye.ui.theme.OceanDeep
-import seamain.org.typhoonEye.ui.theme.OceanLight
-import seamain.org.typhoonEye.ui.theme.OceanMid
+import seamain.org.typhoonEye.ui.theme.TyphoonEyeTheme
 import seamain.org.typhoonEye.ui.util.IntensityLevel
 import seamain.org.typhoonEye.ui.util.currentIntensity
 import seamain.org.typhoonEye.ui.util.formatCoordinate
@@ -92,197 +100,183 @@ fun HomeScreen(
     onTyphoonClick: (Typhoon) -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
     val pullState = rememberPullToRefreshState()
+    val activeCount = when (uiState) {
+        is TyphoonUiState.Success -> uiState.typhoons.count { it.status == "active" }
+        else -> 0
+    }
 
-    Box(
+    Scaffold(
         modifier = modifier
             .fillMaxSize()
-            .pullToRefresh(
-                isRefreshing = isRefreshing,
-                onRefresh = onRefresh,
-                state = pullState
-            )
-    ) {
-        when (uiState) {
-            is TyphoonUiState.Loading -> {
-                Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
-                        Spacer(modifier = Modifier.height(12.dp))
-                        Text(
-                            text = "正在获取台风数据…",
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
+            .nestedScroll(scrollBehavior.nestedScrollConnection),
+        containerColor = MaterialTheme.colorScheme.surfaceContainerLowest,
+        topBar = {
+            LargeTopAppBar(
+                title = {
+                    Column {
+                        Text("台风眼")
+                        AnimatedVisibility(visible = scrollBehavior.state.collapsedFraction < 0.5f) {
+                            Text(
+                                text = "西北太平洋台风实时监测",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
                     }
-                }
-            }
-
-            is TyphoonUiState.Error -> {
-                ErrorState(
+                },
+                actions = {
+                    FilledTonalIconButton(
+                        onClick = onLoadDemo,
+                        modifier = Modifier.semantics { contentDescription = "演示数据" }
+                    ) {
+                        Icon(Icons.Filled.Science, contentDescription = null)
+                    }
+                    IconButton(
+                        onClick = onRefresh,
+                        modifier = Modifier.semantics { contentDescription = "刷新" }
+                    ) {
+                        Icon(Icons.Outlined.Refresh, contentDescription = null)
+                    }
+                },
+                colors = TopAppBarDefaults.largeTopAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceContainerLowest,
+                    scrolledContainerColor = MaterialTheme.colorScheme.surfaceContainer,
+                    titleContentColor = MaterialTheme.colorScheme.onSurface
+                ),
+                scrollBehavior = scrollBehavior
+            )
+        }
+    ) { padding ->
+        PullToRefreshBox(
+            isRefreshing = isRefreshing,
+            onRefresh = onRefresh,
+            state = pullState,
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+        ) {
+            when (uiState) {
+                is TyphoonUiState.Loading -> LoadingState()
+                is TyphoonUiState.Error -> ErrorState(
                     message = uiState.message,
                     onRetry = onRefresh,
                     onLoadDemo = onLoadDemo
                 )
-            }
-
-            is TyphoonUiState.Success -> {
-                LazyColumn(
-                    modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(bottom = 28.dp)
-                ) {
-                    item {
-                        HomeHeroHeader(
-                            activeCount = uiState.typhoons.count { it.status == "active" },
-                            dataMode = dataMode,
-                            lastUpdated = lastUpdated,
-                            onRefresh = onRefresh,
-                            onLoadDemo = onLoadDemo
-                        )
-                    }
-                    item {
-                        SearchAndFilters(
-                            query = query,
-                            intensityFilter = intensityFilter,
-                            onQueryChange = onQueryChange,
-                            onFilterChange = onFilterChange,
-                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
-                        )
-                    }
-
-                    if (filteredTyphoons.isEmpty()) {
+                is TyphoonUiState.Success -> {
+                    LazyColumn(
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(bottom = 28.dp)
+                    ) {
                         item {
-                            EmptyListState(
-                                hasAny = uiState.typhoons.isNotEmpty(),
-                                onLoadDemo = onLoadDemo,
-                                onClearFilters = {
-                                    onQueryChange("")
-                                    onFilterChange(null)
-                                }
+                            StatusSummaryRow(
+                                activeCount = activeCount,
+                                dataMode = dataMode,
+                                lastUpdated = lastUpdated,
+                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
                             )
                         }
-                    } else {
-                        items(items = filteredTyphoons, key = { it.id }) { typhoon ->
-                            TyphoonListCard(
-                                typhoon = typhoon,
-                                onClick = { onTyphoonClick(typhoon) },
-                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp)
+                        item {
+                            SearchAndFilters(
+                                query = query,
+                                intensityFilter = intensityFilter,
+                                onQueryChange = onQueryChange,
+                                onFilterChange = onFilterChange,
+                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
                             )
+                        }
+
+                        if (filteredTyphoons.isEmpty()) {
+                            item {
+                                EmptyListState(
+                                    hasAny = uiState.typhoons.isNotEmpty(),
+                                    onLoadDemo = onLoadDemo,
+                                    onClearFilters = {
+                                        onQueryChange("")
+                                        onFilterChange(null)
+                                    }
+                                )
+                            }
+                        } else {
+                            items(items = filteredTyphoons, key = { it.id }) { typhoon ->
+                                TyphoonListCard(
+                                    typhoon = typhoon,
+                                    onClick = { onTyphoonClick(typhoon) },
+                                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp)
+                                )
+                            }
                         }
                     }
                 }
             }
         }
-
-        PullToRefreshDefaults.Indicator(
-            modifier = Modifier.align(Alignment.TopCenter),
-            isRefreshing = isRefreshing,
-            state = pullState
-        )
     }
 }
 
 @Composable
-private fun HomeHeroHeader(
+private fun StatusSummaryRow(
     activeCount: Int,
     dataMode: DataMode,
     lastUpdated: String?,
-    onRefresh: () -> Unit,
-    onLoadDemo: () -> Unit
+    modifier: Modifier = Modifier
 ) {
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(
-                Brush.verticalGradient(
-                    listOf(OceanDeep, OceanMid, Ocean.copy(alpha = 0.92f))
-                )
-            )
-            .padding(horizontal = 20.dp, vertical = 24.dp)
+    LazyRow(
+        modifier = modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        Column {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.Top
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            imageVector = Icons.Filled.Cyclone,
-                            contentDescription = null,
-                            tint = OceanLight,
-                            modifier = Modifier.size(28.dp)
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            text = "台风眼",
-                            style = MaterialTheme.typography.headlineMedium,
-                            color = Color.White,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-                    Spacer(modifier = Modifier.height(6.dp))
-                    Text(
-                        text = "西北太平洋台风实时监测",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = Color.White.copy(alpha = 0.78f)
+        item {
+            AssistChip(
+                onClick = {},
+                enabled = false,
+                label = { Text("活跃 $activeCount") },
+                leadingIcon = {
+                    Icon(
+                        Icons.Filled.Cyclone,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp)
                     )
-                }
-                Row {
-                    IconButton(onClick = onLoadDemo) {
-                        Icon(
-                            imageVector = Icons.Filled.Science,
-                            contentDescription = "演示数据",
-                            tint = Color.White
-                        )
-                    }
-                    IconButton(onClick = onRefresh) {
-                        Icon(
-                            imageVector = Icons.Outlined.Refresh,
-                            contentDescription = "刷新",
-                            tint = Color.White
-                        )
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.height(20.dp))
-
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                StatPill(title = "活跃台风", value = "$activeCount")
-                StatPill(
-                    title = "数据模式",
-                    value = if (dataMode == DataMode.Live) "实时" else "演示"
+                },
+                colors = AssistChipDefaults.assistChipColors(
+                    disabledContainerColor = MaterialTheme.colorScheme.primaryContainer,
+                    disabledLabelColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                    disabledLeadingIconContentColor = MaterialTheme.colorScheme.onPrimaryContainer
                 )
-                if (lastUpdated != null) {
-                    StatPill(title = "更新时间", value = lastUpdated)
-                }
-            }
+            )
         }
-    }
-}
-
-@Composable
-private fun StatPill(title: String, value: String) {
-    Surface(
-        shape = RoundedCornerShape(14.dp),
-        color = Color.White.copy(alpha = 0.12f)
-    ) {
-        Column(modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp)) {
-            Text(
-                text = title,
-                style = MaterialTheme.typography.labelMedium,
-                color = Color.White.copy(alpha = 0.75f)
+        item {
+            SuggestionChip(
+                onClick = {},
+                enabled = false,
+                label = {
+                    Text(if (dataMode == DataMode.Live) "实时数据" else "演示数据")
+                },
+                colors = SuggestionChipDefaults.suggestionChipColors(
+                    disabledContainerColor = if (dataMode == DataMode.Live) {
+                        MaterialTheme.colorScheme.secondaryContainer
+                    } else {
+                        MaterialTheme.colorScheme.tertiaryContainer
+                    },
+                    disabledLabelColor = if (dataMode == DataMode.Live) {
+                        MaterialTheme.colorScheme.onSecondaryContainer
+                    } else {
+                        MaterialTheme.colorScheme.onTertiaryContainer
+                    }
+                )
             )
-            Text(
-                text = value,
-                style = MaterialTheme.typography.titleMedium,
-                color = Color.White,
-                fontWeight = FontWeight.SemiBold
-            )
+        }
+        if (lastUpdated != null) {
+            item {
+                SuggestionChip(
+                    onClick = {},
+                    enabled = false,
+                    label = { Text("更新 $lastUpdated") },
+                    colors = SuggestionChipDefaults.suggestionChipColors(
+                        disabledContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                        disabledLabelColor = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                )
+            }
         }
     }
 }
@@ -296,53 +290,64 @@ private fun SearchAndFilters(
     modifier: Modifier = Modifier
 ) {
     Column(modifier = modifier) {
-        OutlinedTextField(
+        TextField(
             value = query,
             onValueChange = onQueryChange,
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .semantics { contentDescription = "搜索台风" },
             singleLine = true,
             placeholder = { Text("搜索台风名称 / 编号") },
             leadingIcon = {
                 Icon(Icons.Filled.Search, contentDescription = null)
             },
             trailingIcon = {
-                AnimatedVisibility(visible = query.isNotEmpty()) {
+                AnimatedVisibility(
+                    visible = query.isNotEmpty(),
+                    enter = fadeIn(),
+                    exit = fadeOut()
+                ) {
                     IconButton(onClick = { onQueryChange("") }) {
-                        Icon(Icons.Filled.Clear, contentDescription = "清除")
+                        Icon(Icons.Filled.Clear, contentDescription = "清除搜索")
                     }
                 }
             },
-            shape = RoundedCornerShape(16.dp),
-            colors = OutlinedTextFieldDefaults.colors(
-                focusedBorderColor = MaterialTheme.colorScheme.primary,
-                unfocusedContainerColor = MaterialTheme.colorScheme.surface,
-                focusedContainerColor = MaterialTheme.colorScheme.surface
+            shape = MaterialTheme.shapes.extraLarge,
+            colors = TextFieldDefaults.colors(
+                focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                disabledContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                focusedIndicatorColor = Color.Transparent,
+                unfocusedIndicatorColor = Color.Transparent,
+                disabledIndicatorColor = Color.Transparent
             )
         )
-        Spacer(modifier = Modifier.height(10.dp))
-        Row(
-            modifier = Modifier.horizontalScroll(rememberScrollState()),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            FilterChip(
-                selected = intensityFilter == null,
-                onClick = { onFilterChange(null) },
-                label = { Text("全部") }
-            )
-            IntensityLevel.entries
-                .filter { it != IntensityLevel.UNKNOWN }
-                .forEach { level ->
-                    val selected = intensityFilter == level
-                    FilterChip(
-                        selected = selected,
-                        onClick = { onFilterChange(level) },
-                        label = { Text(level.shortLabel) },
-                        colors = FilterChipDefaults.filterChipColors(
-                            selectedContainerColor = intensityColor(level).copy(alpha = 0.2f),
-                            selectedLabelColor = intensityColor(level)
-                        )
+        Spacer(modifier = Modifier.height(12.dp))
+        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            item {
+                FilterChip(
+                    selected = intensityFilter == null,
+                    onClick = { onFilterChange(null) },
+                    label = { Text("全部") }
+                )
+            }
+            items(
+                items = IntensityLevel.entries.filter { it != IntensityLevel.UNKNOWN },
+                key = { it.name }
+            ) { level ->
+                val selected = intensityFilter == level
+                val accent = intensityColor(level)
+                FilterChip(
+                    selected = selected,
+                    onClick = { onFilterChange(level) },
+                    label = { Text(level.shortLabel) },
+                    colors = FilterChipDefaults.filterChipColors(
+                        selectedContainerColor = accent.copy(alpha = 0.18f),
+                        selectedLabelColor = accent,
+                        selectedLeadingIconColor = accent
                     )
-                }
+                )
+            }
         }
     }
 }
@@ -357,21 +362,25 @@ fun TyphoonListCard(
     val last = typhoon.latestPoint()
     val accent = intensityColor(intensity)
 
-    Card(
+    OutlinedCard(
+        onClick = onClick,
         modifier = modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick),
-        shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface
-        ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+            .semantics {
+                contentDescription = "台风 ${typhoon.name}，${intensity.label}"
+            },
+        shape = MaterialTheme.shapes.large,
+        colors = CardDefaults.outlinedCardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+        )
     ) {
         Row(modifier = Modifier.fillMaxWidth()) {
             Box(
                 modifier = Modifier
-                    .width(6.dp)
-                    .height(148.dp)
+                    .width(4.dp)
+                    .height(156.dp)
+                    .padding(vertical = 12.dp)
+                    .clip(MaterialTheme.shapes.extraSmall)
                     .background(accent)
             )
             Column(
@@ -382,13 +391,13 @@ fun TyphoonListCard(
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+                    verticalAlignment = Alignment.Top
                 ) {
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
                             text = typhoon.name,
                             style = MaterialTheme.typography.titleLarge,
-                            fontWeight = FontWeight.Bold,
+                            fontWeight = FontWeight.SemiBold,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )
@@ -404,9 +413,11 @@ fun TyphoonListCard(
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
-                    Column(horizontalAlignment = Alignment.End) {
+                    Column(
+                        horizontalAlignment = Alignment.End,
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
                         IntensityBadge(level = intensity, compact = true)
-                        Spacer(modifier = Modifier.height(6.dp))
                         StatusChip(active = typhoon.status == "active")
                     }
                 }
@@ -423,7 +434,7 @@ fun TyphoonListCard(
                 }
 
                 if (last != null) {
-                    Spacer(modifier = Modifier.height(12.dp))
+                    Spacer(modifier = Modifier.height(14.dp))
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween
@@ -444,7 +455,7 @@ fun TyphoonListCard(
                             value = last.moveLabel().take(10)
                         )
                     }
-                    Spacer(modifier = Modifier.height(8.dp))
+                    Spacer(modifier = Modifier.height(10.dp))
                     Text(
                         text = "更新 ${last.time} · ${formatCoordinate(last.lat, last.lng)}",
                         style = MaterialTheme.typography.labelSmall,
@@ -465,16 +476,16 @@ private fun MiniMetric(
     Row(verticalAlignment = Alignment.CenterVertically) {
         Box(
             modifier = Modifier
-                .size(28.dp)
+                .size(32.dp)
                 .clip(CircleShape)
-                .background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.55f)),
+                .background(MaterialTheme.colorScheme.secondaryContainer),
             contentAlignment = Alignment.Center
         ) {
             Icon(
                 imageVector = icon,
                 contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(15.dp)
+                tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                modifier = Modifier.size(16.dp)
             )
         }
         Spacer(modifier = Modifier.width(6.dp))
@@ -496,6 +507,26 @@ private fun MiniMetric(
 }
 
 @Composable
+private fun LoadingState() {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .semantics { contentDescription = "正在加载" },
+        contentAlignment = Alignment.Center
+    ) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
+            Spacer(modifier = Modifier.height(16.dp))
+            Text(
+                text = "正在获取台风数据…",
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
+}
+
+@Composable
 private fun EmptyListState(
     hasAny: Boolean,
     onLoadDemo: () -> Unit,
@@ -504,28 +535,30 @@ private fun EmptyListState(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(32.dp),
+            .padding(40.dp)
+            .semantics {
+                contentDescription = if (hasAny) "没有匹配的台风" else "当前暂无活跃台风"
+            },
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Icon(
             imageVector = Icons.Filled.Cyclone,
             contentDescription = null,
-            tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f),
-            modifier = Modifier.size(56.dp)
+            tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.45f),
+            modifier = Modifier.size(64.dp)
         )
-        Spacer(modifier = Modifier.height(12.dp))
+        Spacer(modifier = Modifier.height(16.dp))
         Text(
             text = if (hasAny) "没有匹配的台风" else "当前暂无活跃台风",
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.SemiBold
+            style = MaterialTheme.typography.titleLarge
         )
-        Spacer(modifier = Modifier.height(6.dp))
+        Spacer(modifier = Modifier.height(8.dp))
         Text(
             text = if (hasAny) "试试调整搜索或强度筛选" else "下拉刷新，或加载演示数据预览界面",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(20.dp))
         if (hasAny) {
             OutlinedButton(onClick = onClearFilters) {
                 Text("清除筛选")
@@ -549,7 +582,8 @@ private fun ErrorState(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(32.dp),
+            .padding(32.dp)
+            .semantics { contentDescription = "加载失败" },
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
@@ -557,13 +591,12 @@ private fun ErrorState(
             imageVector = Icons.Filled.CloudOff,
             contentDescription = null,
             tint = MaterialTheme.colorScheme.error,
-            modifier = Modifier.size(56.dp)
+            modifier = Modifier.size(64.dp)
         )
-        Spacer(modifier = Modifier.height(12.dp))
+        Spacer(modifier = Modifier.height(16.dp))
         Text(
             text = "加载失败",
-            style = MaterialTheme.typography.titleLarge,
-            fontWeight = FontWeight.Bold
+            style = MaterialTheme.typography.headlineSmall
         )
         Spacer(modifier = Modifier.height(8.dp))
         Text(
@@ -571,16 +604,83 @@ private fun ErrorState(
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
-        Spacer(modifier = Modifier.height(20.dp))
+        Spacer(modifier = Modifier.height(24.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             Button(onClick = onRetry) {
                 Icon(Icons.Outlined.Refresh, contentDescription = null)
                 Spacer(modifier = Modifier.width(6.dp))
                 Text("重试")
             }
-            OutlinedButton(onClick = onLoadDemo) {
+            FilledTonalButton(onClick = onLoadDemo) {
                 Text("演示数据")
             }
         }
     }
 }
+
+@Preview(showBackground = true, name = "Home · Success")
+@Composable
+private fun HomeScreenPreview() {
+    TyphoonEyeTheme {
+        HomeScreen(
+            uiState = TyphoonUiState.Success(previewTyphoons),
+            filteredTyphoons = previewTyphoons,
+            isRefreshing = false,
+            query = "",
+            intensityFilter = null,
+            dataMode = DataMode.Demo,
+            lastUpdated = "14:32:01",
+            onQueryChange = {},
+            onFilterChange = {},
+            onRefresh = {},
+            onLoadDemo = {},
+            onTyphoonClick = {}
+        )
+    }
+}
+
+@Preview(showBackground = true, name = "Home · Empty")
+@Composable
+private fun HomeEmptyPreview() {
+    TyphoonEyeTheme {
+        HomeScreen(
+            uiState = TyphoonUiState.Success(emptyList()),
+            filteredTyphoons = emptyList(),
+            isRefreshing = false,
+            query = "",
+            intensityFilter = null,
+            dataMode = DataMode.Live,
+            lastUpdated = null,
+            onQueryChange = {},
+            onFilterChange = {},
+            onRefresh = {},
+            onLoadDemo = {},
+            onTyphoonClick = {}
+        )
+    }
+}
+
+internal val previewTyphoons = listOf(
+    Typhoon(
+        id = "202609",
+        name = "巴威",
+        englishName = "BAVI",
+        status = "active",
+        strong = "台风",
+        positionDesc = "距离浙闽交界东南方向约890公里",
+        points = listOf(
+            TyphoonPoint("2026-07-10 14:00", 21.8, 126.9, 960, 40, "13", "台风", "北西", "22")
+        )
+    ),
+    Typhoon(
+        id = "202610",
+        name = "美莎克",
+        englishName = "MEKKHALA",
+        status = "active",
+        strong = "热带风暴",
+        positionDesc = "菲律宾以东洋面",
+        points = listOf(
+            TyphoonPoint("2026-07-10 14:00", 12.5, 135.2, 998, 18, "8", "热带风暴", "NW", "20")
+        )
+    )
+)

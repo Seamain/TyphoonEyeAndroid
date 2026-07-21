@@ -173,4 +173,32 @@ class TyphoonRepositoryTest {
         assertTrue(result.getOrNull()?.isEmpty() == true)
         verify(qWeatherApi, never()).getStormList(any(), any())
     }
+
+    @Test
+    fun `getActiveTyphoons reports missing credentials without crashing`() = runTest {
+        val emptyRepo = TyphoonRepository(juheApi, qWeatherApi, juheKey = "", qWeatherConfigured = false)
+        val result = emptyRepo.getActiveTyphoons()
+        assertTrue(result.isFailure)
+        val message = result.exceptionOrNull()?.message.orEmpty()
+        assertTrue(message.contains("JUHE_KEY"))
+        assertTrue(message.contains("和风"))
+        verify(juheApi, never()).getActiveTyphoons(any())
+        verify(qWeatherApi, never()).getStormList(any(), any())
+    }
+
+    @Test
+    fun `getActiveTyphoons falls back when Juhe key invalid 10001`() = runTest {
+        whenever(juheApi.getActiveTyphoons(juheKey)).thenReturn(
+            JuheActiveListResponse(reason = "错误的请求KEY", errorCode = 10001, result = null)
+        )
+        whenever(qWeatherApi.getStormList(any(), any())).thenReturn(
+            QWeatherStormListResponse(code = "200", storm = emptyList())
+        )
+
+        val result = repository.getActiveTyphoons()
+
+        assertTrue(result.isSuccess)
+        assertTrue(result.getOrNull()?.isEmpty() == true)
+        verify(qWeatherApi).getStormList(eq("NP"), any())
+    }
 }

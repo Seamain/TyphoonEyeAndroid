@@ -16,19 +16,30 @@ private val DarkColorScheme = darkColorScheme(
     onSecondary = OceanDeep,
     secondaryContainer = Color(0xFF1A3A4A),
     onSecondaryContainer = SeaFoam,
-    tertiary = ForecastPurple,
-    onTertiary = Color.White,
-    tertiaryContainer = Color(0xFF3A2A55),
-    onTertiaryContainer = Color(0xFFE1D4FF),
+    tertiary = ForecastTealLight,
+    onTertiary = OceanDeep,
+    tertiaryContainer = Color(0xFF00363A),
+    onTertiaryContainer = Color(0xFFB2EBF2),
     background = SurfaceDark,
     onBackground = Color(0xFFE8EEF4),
     surface = CardDark,
     onSurface = Color(0xFFE8EEF4),
     surfaceVariant = Color(0xFF1E2D3D),
     onSurfaceVariant = Color(0xFFB0BEC5),
+    surfaceContainerLowest = Color(0xFF0A1018),
+    surfaceContainerLow = SurfaceDark,
+    surfaceContainer = SurfaceContainerDark,
+    surfaceContainerHigh = SurfaceContainerHighDark,
+    surfaceContainerHighest = SurfaceContainerHighestDark,
     outline = Color(0xFF546E7A),
+    outlineVariant = Color(0xFF37474F),
     error = ErrorRed,
-    onError = Color.White
+    onError = Color.White,
+    errorContainer = Color(0xFF8A1C1C),
+    onErrorContainer = Color(0xFFFFDAD6),
+    inverseSurface = Color(0xFFE8EEF4),
+    inverseOnSurface = OceanDeep,
+    inversePrimary = Ocean
 )
 
 private val LightColorScheme = lightColorScheme(
@@ -40,19 +51,30 @@ private val LightColorScheme = lightColorScheme(
     onSecondary = Color.White,
     secondaryContainer = Mist,
     onSecondaryContainer = StormNavy,
-    tertiary = ForecastPurple,
+    tertiary = ForecastTeal,
     onTertiary = Color.White,
-    tertiaryContainer = Color(0xFFEDE7F6),
-    onTertiaryContainer = Color(0xFF311B92),
+    tertiaryContainer = Color(0xFFB2EBF2),
+    onTertiaryContainer = Color(0xFF00363A),
     background = CloudWhite,
     onBackground = StormNavy,
     surface = Color.White,
     onSurface = StormNavy,
     surfaceVariant = Mist,
     onSurfaceVariant = Color(0xFF455A64),
+    surfaceContainerLowest = Color.White,
+    surfaceContainerLow = Color(0xFFF2F7FB),
+    surfaceContainer = SurfaceContainerLight,
+    surfaceContainerHigh = SurfaceContainerHighLight,
+    surfaceContainerHighest = SurfaceContainerHighestLight,
     outline = Color(0xFF90A4AE),
+    outlineVariant = Color(0xFFCFD8DC),
     error = ErrorRed,
-    onError = Color.White
+    onError = Color.White,
+    errorContainer = Color(0xFFFFDAD6),
+    onErrorContainer = Color(0xFF410002),
+    inverseSurface = StormNavy,
+    inverseOnSurface = CloudWhite,
+    inversePrimary = OceanLight
 )
 
 @Composable
@@ -66,6 +88,7 @@ fun TyphoonEyeTheme(
     MaterialTheme(
         colorScheme = colorScheme,
         typography = Typography,
+        shapes = Shapes,
         content = content
     )
 }

@@ -12,7 +12,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -22,7 +23,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import seamain.org.typhoonEye.data.model.TyphoonPoint
-import seamain.org.typhoonEye.ui.theme.ForecastPurple
 import seamain.org.typhoonEye.ui.util.displayIntensity
 import seamain.org.typhoonEye.ui.util.formatCoordinate
 import seamain.org.typhoonEye.ui.util.intensityColor
@@ -37,7 +37,11 @@ fun PointTimelineItem(
     modifier: Modifier = Modifier
 ) {
     val level = resolveIntensity(point.strong, point.power)
-    val color = if (isForecast) ForecastPurple else intensityColor(level)
+    val color = if (isForecast) {
+        MaterialTheme.colorScheme.tertiary
+    } else {
+        intensityColor(level)
+    }
 
     Row(
         modifier = modifier
@@ -62,49 +66,52 @@ fun PointTimelineItem(
             }
         }
 
-        Column(
-            modifier = Modifier
-                .weight(1f)
-                .clip(RoundedCornerShape(14.dp))
-                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f))
-                .padding(12.dp)
+        Card(
+            modifier = Modifier.weight(1f),
+            shape = MaterialTheme.shapes.medium,
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
+            ),
+            elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
         ) {
-            Text(
-                text = point.time,
-                style = MaterialTheme.typography.labelLarge,
-                fontWeight = FontWeight.SemiBold,
-                color = color
-            )
-            Spacer(modifier = Modifier.height(6.dp))
-            Text(
-                text = formatCoordinate(point.lat, point.lng),
-                style = MaterialTheme.typography.bodyMedium
-            )
-            Spacer(modifier = Modifier.height(6.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Column(modifier = Modifier.padding(12.dp)) {
                 Text(
-                    text = "风速 ${point.speed} m/s",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    text = point.time,
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.SemiBold,
+                    color = color
                 )
+                Spacer(modifier = Modifier.height(6.dp))
                 Text(
-                    text = "气压 ${point.pressure} hPa",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    text = formatCoordinate(point.lat, point.lng),
+                    style = MaterialTheme.typography.bodyMedium
                 )
-            }
-            Spacer(modifier = Modifier.height(4.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text(
-                    text = "强度 ${point.displayIntensity()}",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Text(
-                    text = "移动 ${point.moveLabel()}",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+                Spacer(modifier = Modifier.height(6.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text(
+                        text = "风速 ${point.speed} m/s",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text(
+                        text = "气压 ${point.pressure} hPa",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                Spacer(modifier = Modifier.height(4.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text(
+                        text = "强度 ${point.displayIntensity()}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text(
+                        text = "移动 ${point.moveLabel()}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
             }
         }
     }

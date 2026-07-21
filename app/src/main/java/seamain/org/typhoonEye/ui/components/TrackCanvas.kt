@@ -13,7 +13,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
@@ -31,8 +30,6 @@ import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.unit.dp
 import seamain.org.typhoonEye.data.model.TyphoonPoint
-import seamain.org.typhoonEye.ui.theme.ForecastPurple
-import seamain.org.typhoonEye.ui.theme.OceanLight
 import seamain.org.typhoonEye.ui.util.intensityColor
 import seamain.org.typhoonEye.ui.util.resolveIntensity
 
@@ -42,13 +39,17 @@ fun TrackMapCard(
     forecast: List<TyphoonPoint>,
     modifier: Modifier = Modifier
 ) {
+    val historyColor = MaterialTheme.colorScheme.primary
+    val forecastColor = MaterialTheme.colorScheme.tertiary
+    val currentColor = MaterialTheme.colorScheme.error
+
     Card(
         modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(20.dp),
+        shape = MaterialTheme.shapes.extraLarge,
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface
+            containerColor = MaterialTheme.colorScheme.surfaceContainerLow
         ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Text(
@@ -65,8 +66,8 @@ fun TrackMapCard(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(240.dp)
-                    .clip(RoundedCornerShape(16.dp))
-                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f))
+                    .clip(MaterialTheme.shapes.large)
+                    .background(MaterialTheme.colorScheme.surfaceContainerHighest)
             ) {
                 if (history.isEmpty() && forecast.isEmpty()) {
                     Text(
@@ -78,6 +79,8 @@ fun TrackMapCard(
                     TrackCanvas(
                         history = history,
                         forecast = forecast,
+                        historyColor = historyColor,
+                        forecastColor = forecastColor,
                         modifier = Modifier
                             .fillMaxSize()
                             .padding(16.dp)
@@ -86,11 +89,11 @@ fun TrackMapCard(
             }
             Spacer(modifier = Modifier.height(12.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
-                LegendDot(color = OceanLight, label = "历史路径")
+                LegendDot(color = historyColor, label = "历史路径")
                 Spacer(modifier = Modifier.width(16.dp))
-                LegendDot(color = ForecastPurple, label = "预报路径")
+                LegendDot(color = forecastColor, label = "预报路径")
                 Spacer(modifier = Modifier.width(16.dp))
-                LegendDot(color = Color(0xFFEF5350), label = "当前位置")
+                LegendDot(color = currentColor, label = "当前位置")
             }
         }
     }
@@ -118,7 +121,9 @@ private fun LegendDot(color: Color, label: String) {
 fun TrackCanvas(
     history: List<TyphoonPoint>,
     forecast: List<TyphoonPoint>,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    historyColor: Color = Color(0xFF4FC3F7),
+    forecastColor: Color = Color(0xFF00838F)
 ) {
     val all = history + forecast
     if (all.isEmpty()) return
@@ -132,10 +137,8 @@ fun TrackCanvas(
         val latSpan = (maxLat - minLat).coerceAtLeast(0.5)
         val lngSpan = (maxLng - minLng).coerceAtLeast(0.5)
 
-        // Keep aspect-ish padding
         fun project(lat: Double, lng: Double): Offset {
             val x = pad + ((lng - minLng) / lngSpan * (size.width - pad * 2)).toFloat()
-            // Invert lat for screen Y
             val y = pad + ((maxLat - lat) / latSpan * (size.height - pad * 2)).toFloat()
             return Offset(x, y)
         }
@@ -163,12 +166,11 @@ fun TrackCanvas(
             )
         }
 
-        // Connect last history to first forecast lightly
         if (history.isNotEmpty() && forecast.isNotEmpty()) {
             val a = project(history.last().lat, history.last().lng)
             val b = project(forecast.first().lat, forecast.first().lng)
             drawLine(
-                color = ForecastPurple.copy(alpha = 0.45f),
+                color = forecastColor.copy(alpha = 0.45f),
                 start = a,
                 end = b,
                 strokeWidth = 3f,
@@ -176,8 +178,8 @@ fun TrackCanvas(
             )
         }
 
-        drawPolyline(history, OceanLight, dashed = false)
-        drawPolyline(forecast, ForecastPurple, dashed = true)
+        drawPolyline(history, historyColor, dashed = false)
+        drawPolyline(forecast, forecastColor, dashed = true)
 
         history.forEachIndexed { index, point ->
             val o = project(point.lat, point.lng)
@@ -193,7 +195,7 @@ fun TrackCanvas(
 
         forecast.forEach { point ->
             val o = project(point.lat, point.lng)
-            drawCircle(color = ForecastPurple.copy(alpha = 0.9f), radius = 4.5f, center = o)
+            drawCircle(color = forecastColor.copy(alpha = 0.9f), radius = 4.5f, center = o)
             drawCircle(color = Color.White.copy(alpha = 0.7f), radius = 1.8f, center = o)
         }
     }
