@@ -2,18 +2,35 @@ package seamain.org.typhoonEye.data.repository
 
 import android.util.Log
 import seamain.org.typhoonEye.data.api.JuheTyphoonApi
+import seamain.org.typhoonEye.data.api.QWeatherAuthInterceptor
 import seamain.org.typhoonEye.data.api.QWeatherTyphoonApi
-import seamain.org.typhoonEye.data.model.Typhoon
+import seamain.org.typhoonEye.data.local.TyphoonLocalDataSource
 import seamain.org.typhoonEye.data.model.qWeatherTypeToStrong
 import seamain.org.typhoonEye.data.model.toDomain
+import seamain.org.typhoonEye.domain.model.Typhoon
+import seamain.org.typhoonEye.domain.model.TyphoonFeed
+import seamain.org.typhoonEye.domain.repository.TyphoonRepository
 import java.util.Calendar
+import javax.inject.Inject
+import javax.inject.Named
 
-class TyphoonRepository(
+/**
+ * Offline-first typhoon repository:
+ * 1) Prefer Juhe remote, fallback QWeather
+ * 2) On remote success → write Room cache
+ * 3) On remote failure → serve Room cache when available
+ */
+class DefaultTyphoonRepository @Inject constructor(
     private val juheApi: JuheTyphoonApi,
     private val qWeatherApi: QWeatherTyphoonApi,
-    private val juheKey: String,
-    private val qWeatherConfigured: Boolean = true
-) {
+    @Named("juhe_key") private val juheKey: String,
+    private val qWeatherAuth: QWeatherAuthInterceptor,
+    private val localDataSource: TyphoonLocalDataSource
+) : TyphoonRepository {
+
+    private val qWeatherConfigured: Boolean
+        get() = qWeatherAuth.hasCredentials
+
     private val tag = "TyphoonRepository"
 
     private class FetchOutcome(
@@ -21,10 +38,48 @@ class TyphoonRepository(
         val error: String? = null
     )
 
-    /**
-     * 优先聚合数据；KEY 无效 / 配额用尽 / 失败时回退和风天气。
-     */
-    suspend fun getActiveTyphoons(): Result<List<Typhoon>> {
+    override suspend fun getActiveTyphoons(): Result<TyphoonFeed> {
+        val remote = fetchRemoteActive()
+        remote.onSuccess { list ->
+            runCatching { localDataSource.replaceAll(list) }
+                .onFailure { Log.w(tag, "Failed to cache active typhoons", it) }
+            return Result.success(TyphoonFeed(typhoons = list, fromCache = false))
+        }
+
+        val cached = runCatching { localDataSource.getAll() }.getOrDefault(emptyList())
+        if (cached.isNotEmpty()) {
+            Log.i(tag, "Serving ${cached.size} typhoon(s) from Room cache")
+            return Result.success(
+                TyphoonFeed(
+                    typhoons = cached,
+                    fromCache = true,
+                    staleMessage = remote.exceptionOrNull()?.message
+                )
+            )
+        }
+        return Result.failure(
+            remote.exceptionOrNull()
+                ?: Exception("所有数据源均失败。请检查 local.properties（参考 local.properties.example）")
+        )
+    }
+
+    override suspend fun getTyphoonDetail(id: String): Result<Typhoon> {
+        val remote = fetchRemoteDetail(id)
+        remote.onSuccess { detail ->
+            runCatching { localDataSource.upsert(detail) }
+                .onFailure { Log.w(tag, "Failed to cache typhoon detail $id", it) }
+            return Result.success(detail)
+        }
+
+        val cached = runCatching { localDataSource.getById(id) }.getOrNull()
+        if (cached != null) {
+            Log.i(tag, "Serving typhoon detail $id from Room cache")
+            return Result.success(cached)
+        }
+        return remote
+    }
+
+    private suspend fun fetchRemoteActive(): Result<List<Typhoon>> {
         val errors = ArrayList<String>()
 
         if (juheKey.isBlank()) {
@@ -55,15 +110,11 @@ class TyphoonRepository(
             errors.joinToString("；")
         }
         return Result.failure(
-            Exception("$detail。请检查 local.properties（参考 local.properties.example），或使用演示数据")
+            Exception("$detail。请检查 local.properties（参考 local.properties.example）")
         )
     }
 
-    /**
-     * 按台风 ID 拉取完整路径（聚合优先，失败则和风）。
-     * [id] 可为聚合 tfid（如 202609）或和风 stormid（如 NP_2609）。
-     */
-    suspend fun getTyphoonDetail(id: String): Result<Typhoon> {
+    private suspend fun fetchRemoteDetail(id: String): Result<Typhoon> {
         if (!id.startsWith("NP_") && juheKey.isNotBlank()) {
             try {
                 val response = juheApi.getTyphoonDetail(juheKey, id)

@@ -2,8 +2,11 @@ import java.util.Properties
 
 plugins {
     alias(libs.plugins.android.application)
+    alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.kotlin.serialization)
+    alias(libs.plugins.ksp)
+    alias(libs.plugins.hilt)
 }
 
 val localProperties = Properties().apply {
@@ -56,11 +59,19 @@ android {
             (localProperties.getProperty("QWEATHER_HOST")?.takeIf { it.isNotBlank() }
                 ?: "https://pu6yvrgfbv.re.qweatherapi.com/").asBuildConfigLiteral()
         )
+        // Empty = bundled asset://map_style.json (Carto raster). Override if needed.
+        buildConfigField(
+            "String",
+            "MAPLIBRE_STYLE_URL",
+            (localProperties.getProperty("MAPLIBRE_STYLE_URL")?.takeIf { it.isNotBlank() }
+                ?: "").asBuildConfigLiteral()
+        )
     }
 
     buildTypes {
         release {
-            isMinifyEnabled = false
+            isMinifyEnabled = true
+            isShrinkResources = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
@@ -82,7 +93,6 @@ android {
     }
 }
 
-// AGP 9 already registers the Kotlin extension; only configure jvmTarget here.
 kotlin {
     compilerOptions {
         jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_11)
@@ -98,6 +108,7 @@ dependencies {
     implementation(libs.androidx.compose.ui.graphics)
     implementation(libs.androidx.compose.ui.tooling.preview)
     implementation(libs.androidx.core.ktx)
+    implementation(libs.androidx.appcompat)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.lifecycle.viewmodel.compose)
 
@@ -109,6 +120,21 @@ dependencies {
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.eddsa)
+    implementation(libs.maplibre.android)
+    implementation(libs.androidx.datastore.preferences)
+    implementation(libs.androidx.work.runtime.ktx)
+    implementation(libs.androidx.room.runtime)
+    implementation(libs.androidx.room.ktx)
+    implementation(libs.androidx.navigation.compose)
+    implementation(libs.androidx.lifecycle.runtime.compose)
+    implementation(libs.hilt.android)
+    // Activity-scoped ViewModels: default viewModel() + @AndroidEntryPoint is enough.
+    // (hilt-navigation-compose only needed for per-backStackEntry hiltViewModel().)
+    implementation(libs.hilt.work)
+    implementation(libs.play.services.location)
+    ksp(libs.androidx.room.compiler)
+    ksp(libs.hilt.compiler)
+    ksp(libs.hilt.androidx.compiler)
 
     testImplementation(libs.junit)
     testImplementation("org.mockito:mockito-core:5.11.0")
@@ -116,6 +142,8 @@ dependencies {
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.9.0")
     testImplementation("org.json:json:20231013") // For testing JSON in unit tests
     testImplementation("org.robolectric:robolectric:4.14.1")
+    testImplementation(libs.androidx.room.testing)
+    testImplementation(libs.turbine)
     testImplementation(platform(libs.androidx.compose.bom))
     testImplementation(libs.androidx.compose.ui.test.junit4)
     testImplementation(libs.androidx.compose.material3)

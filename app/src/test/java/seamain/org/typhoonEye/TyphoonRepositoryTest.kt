@@ -2,6 +2,7 @@ package seamain.org.typhoonEye
 
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -12,7 +13,9 @@ import org.mockito.kotlin.never
 import org.mockito.kotlin.verify
 import org.mockito.kotlin.whenever
 import seamain.org.typhoonEye.data.api.JuheTyphoonApi
+import seamain.org.typhoonEye.data.api.QWeatherAuthInterceptor
 import seamain.org.typhoonEye.data.api.QWeatherTyphoonApi
+import seamain.org.typhoonEye.data.local.TyphoonLocalDataSource
 import seamain.org.typhoonEye.data.model.JuheActiveListResponse
 import seamain.org.typhoonEye.data.model.JuheActiveListResult
 import seamain.org.typhoonEye.data.model.JuheActiveTyphoon
@@ -20,24 +23,42 @@ import seamain.org.typhoonEye.data.model.JuheDetailData
 import seamain.org.typhoonEye.data.model.JuheDetailResponse
 import seamain.org.typhoonEye.data.model.JuheDetailResult
 import seamain.org.typhoonEye.data.model.JuheTrackPoint
+import seamain.org.typhoonEye.data.model.QWeatherStormForecastResponse
 import seamain.org.typhoonEye.data.model.QWeatherStormInfo
 import seamain.org.typhoonEye.data.model.QWeatherStormListResponse
 import seamain.org.typhoonEye.data.model.QWeatherStormTrackResponse
 import seamain.org.typhoonEye.data.model.QWeatherTrackPoint
-import seamain.org.typhoonEye.data.repository.TyphoonRepository
+import seamain.org.typhoonEye.data.repository.DefaultTyphoonRepository
+import seamain.org.typhoonEye.domain.model.Typhoon
+import seamain.org.typhoonEye.domain.model.TyphoonPoint
 
 class TyphoonRepositoryTest {
 
     private lateinit var juheApi: JuheTyphoonApi
     private lateinit var qWeatherApi: QWeatherTyphoonApi
-    private lateinit var repository: TyphoonRepository
+    private lateinit var localDataSource: TyphoonLocalDataSource
+    private lateinit var repository: DefaultTyphoonRepository
     private val juheKey = "juhe_key"
+
+    private fun auth(configured: Boolean = true): QWeatherAuthInterceptor =
+        if (configured) {
+            QWeatherAuthInterceptor(apiKey = "test-key")
+        } else {
+            QWeatherAuthInterceptor()
+        }
 
     @Before
     fun setup() {
         juheApi = mock()
         qWeatherApi = mock()
-        repository = TyphoonRepository(juheApi, qWeatherApi, juheKey)
+        localDataSource = mock()
+        repository = DefaultTyphoonRepository(
+            juheApi = juheApi,
+            qWeatherApi = qWeatherApi,
+            juheKey = juheKey,
+            qWeatherAuth = auth(configured = true),
+            localDataSource = localDataSource
+        )
     }
 
     @Test
@@ -92,12 +113,15 @@ class TyphoonRepositoryTest {
         val result = repository.getActiveTyphoons()
 
         assertTrue(result.isSuccess)
-        assertEquals(1, result.getOrNull()?.size)
-        assertEquals("巴威", result.getOrNull()?.first()?.name)
-        assertEquals(1, result.getOrNull()?.first()?.points?.size)
+        val feed = result.getOrNull()!!
+        assertFalse(feed.fromCache)
+        assertEquals(1, feed.typhoons.size)
+        assertEquals("巴威", feed.typhoons.first().name)
+        assertEquals(1, feed.typhoons.first().points.size)
         verify(juheApi).getActiveTyphoons(juheKey)
         verify(juheApi).getTyphoonDetail(juheKey, "202609")
         verify(qWeatherApi, never()).getStormList(any(), any())
+        verify(localDataSource).replaceAll(any())
     }
 
     @Test
@@ -143,18 +167,20 @@ class TyphoonRepositoryTest {
             )
         )
         whenever(qWeatherApi.getStormForecast("NP_2609")).thenReturn(
-            seamain.org.typhoonEye.data.model.QWeatherStormForecastResponse(code = "200", forecast = emptyList())
+            QWeatherStormForecastResponse(code = "200", forecast = emptyList())
         )
 
         val result = repository.getActiveTyphoons()
 
         assertTrue(result.isSuccess)
-        assertEquals(1, result.getOrNull()?.size)
-        assertEquals("巴威", result.getOrNull()?.first()?.name)
-        assertEquals("强台风", result.getOrNull()?.first()?.strong)
+        val feed = result.getOrNull()!!
+        assertEquals(1, feed.typhoons.size)
+        assertEquals("巴威", feed.typhoons.first().name)
+        assertEquals("强台风", feed.typhoons.first().strong)
         verify(juheApi).getActiveTyphoons(juheKey)
         verify(qWeatherApi).getStormList(eq("NP"), any())
         verify(qWeatherApi).getStormTrack("NP_2609")
+        verify(localDataSource).replaceAll(any())
     }
 
     @Test
@@ -170,13 +196,23 @@ class TyphoonRepositoryTest {
         val result = repository.getActiveTyphoons()
 
         assertTrue(result.isSuccess)
-        assertTrue(result.getOrNull()?.isEmpty() == true)
+        assertTrue(result.getOrNull()?.typhoons?.isEmpty() == true)
+        assertFalse(result.getOrNull()?.fromCache == true)
         verify(qWeatherApi, never()).getStormList(any(), any())
+        verify(localDataSource).replaceAll(emptyList())
     }
 
     @Test
     fun `getActiveTyphoons reports missing credentials without crashing`() = runTest {
-        val emptyRepo = TyphoonRepository(juheApi, qWeatherApi, juheKey = "", qWeatherConfigured = false)
+        val emptyRepo = DefaultTyphoonRepository(
+            juheApi = juheApi,
+            qWeatherApi = qWeatherApi,
+            juheKey = "",
+            qWeatherAuth = auth(configured = false),
+            localDataSource = localDataSource
+        )
+        whenever(localDataSource.getAll()).thenReturn(emptyList())
+
         val result = emptyRepo.getActiveTyphoons()
         assertTrue(result.isFailure)
         val message = result.exceptionOrNull()?.message.orEmpty()
@@ -198,7 +234,58 @@ class TyphoonRepositoryTest {
         val result = repository.getActiveTyphoons()
 
         assertTrue(result.isSuccess)
-        assertTrue(result.getOrNull()?.isEmpty() == true)
+        assertTrue(result.getOrNull()?.typhoons?.isEmpty() == true)
         verify(qWeatherApi).getStormList(eq("NP"), any())
+    }
+
+    @Test
+    fun `getActiveTyphoons serves Room cache when remote fails`() = runTest {
+        whenever(juheApi.getActiveTyphoons(any())).thenThrow(RuntimeException("network down"))
+        whenever(qWeatherApi.getStormList(any(), any())).thenThrow(RuntimeException("network down"))
+        val cached = listOf(
+            Typhoon(
+                id = "202609",
+                name = "巴威",
+                englishName = "BAVI",
+                status = "active",
+                strong = "台风",
+                points = listOf(
+                    TyphoonPoint("2026-07-10 14:00", 21.8, 126.9, 960, 40, "13", "台风")
+                )
+            )
+        )
+        whenever(localDataSource.getAll()).thenReturn(cached)
+
+        val result = repository.getActiveTyphoons()
+
+        assertTrue(result.isSuccess)
+        val feed = result.getOrNull()!!
+        assertTrue(feed.fromCache)
+        assertEquals(1, feed.typhoons.size)
+        assertEquals("巴威", feed.typhoons.first().name)
+        assertTrue(feed.staleMessage?.isNotBlank() == true)
+        verify(localDataSource).getAll()
+        verify(localDataSource, never()).replaceAll(any())
+    }
+
+    @Test
+    fun `getTyphoonDetail returns cache when remote fails`() = runTest {
+        whenever(juheApi.getTyphoonDetail(any(), any())).thenThrow(RuntimeException("timeout"))
+        val cached = Typhoon(
+            id = "202609",
+            name = "巴威",
+            englishName = "BAVI",
+            status = "active",
+            points = listOf(
+                TyphoonPoint("2026-07-10 14:00", 21.8, 126.9, 960, 40, "13", "台风")
+            )
+        )
+        whenever(localDataSource.getById("202609")).thenReturn(cached)
+
+        val result = repository.getTyphoonDetail("202609")
+
+        assertTrue(result.isSuccess)
+        assertEquals("巴威", result.getOrNull()?.name)
+        verify(localDataSource).getById("202609")
     }
 }

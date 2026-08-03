@@ -1,0 +1,257 @@
+package seamain.org.typhoonEye.data.repository
+
+import android.content.Context
+import android.util.Log
+import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
+import seamain.org.typhoonEye.R
+import seamain.org.typhoonEye.data.api.QWeatherAuthInterceptor
+import seamain.org.typhoonEye.data.api.QWeatherWarningApi
+import seamain.org.typhoonEye.data.model.isTyphoonRelated
+import seamain.org.typhoonEye.data.model.toDomain
+import seamain.org.typhoonEye.domain.model.AlertSeverity
+import seamain.org.typhoonEye.domain.model.AlertSource
+import seamain.org.typhoonEye.domain.model.EmergencyAlert
+import seamain.org.typhoonEye.domain.model.Typhoon
+import seamain.org.typhoonEye.domain.model.UserLocation
+import seamain.org.typhoonEye.domain.repository.WarningRepository
+import seamain.org.typhoonEye.ui.util.IntensityLevel
+import seamain.org.typhoonEye.ui.util.currentIntensity
+import seamain.org.typhoonEye.ui.util.label
+import seamain.org.typhoonEye.ui.util.latestPoint
+import java.util.Locale
+import javax.inject.Inject
+import kotlin.math.atan2
+import kotlin.math.cos
+import kotlin.math.roundToInt
+import kotlin.math.sin
+import kotlin.math.sqrt
+
+/**
+ * Official typhoon alerts (QWeather) + intensity-based urgency tips.
+ *
+ * When [UserLocation] is available, official lookups prioritize the device position
+ * so notifications match where the user actually is.
+ */
+class DefaultWarningRepository @Inject constructor(
+    @ApplicationContext private val appContext: Context,
+    private val warningApi: QWeatherWarningApi,
+    private val qWeatherAuth: QWeatherAuthInterceptor
+) : WarningRepository {
+
+    private val qWeatherConfigured: Boolean
+        get() = qWeatherAuth.hasCredentials
+
+    override suspend fun fetchTyphoonAlerts(
+        activeTyphoons: List<Typhoon>,
+        userLocation: UserLocation?
+    ): Result<List<EmergencyAlert>> {
+        return runCatching {
+            val official = if (qWeatherConfigured) {
+                fetchOfficialAlerts(activeTyphoons, userLocation)
+            } else {
+                emptyList()
+            }
+            val intensity = synthesizeIntensityAlerts(activeTyphoons, userLocation)
+            (official + intensity)
+                .distinctBy { it.id }
+                .sortedByDescending { it.severity.rank }
+        }
+    }
+
+    private suspend fun fetchOfficialAlerts(
+        activeTyphoons: List<Typhoon>,
+        userLocation: UserLocation?
+    ): List<EmergencyAlert> {
+        val points = buildWatchPoints(activeTyphoons, userLocation)
+        if (points.isEmpty()) return emptyList()
+
+        return coroutineScope {
+            points.map { (lat, lng, label) ->
+                async {
+                    runCatching {
+                        val latStr = String.format(Locale.US, "%.2f", lat)
+                        val lngStr = String.format(Locale.US, "%.2f", lng)
+                        val response = warningApi.getCurrentAlerts(latStr, lngStr)
+                        response.alerts
+                            .filter { it.isTyphoonRelated() }
+                            .map { it.toDomain() }
+                    }.onFailure { e ->
+                        Log.w(TAG, "Alert fetch failed for $label ($lat,$lng): ${e.message}")
+                    }.getOrDefault(emptyList())
+                }
+            }.awaitAll().flatten()
+                .distinctBy { it.id }
+        }
+    }
+
+    private fun synthesizeIntensityAlerts(
+        activeTyphoons: List<Typhoon>,
+        userLocation: UserLocation?
+    ): List<EmergencyAlert> {
+        return activeTyphoons.mapNotNull { typhoon ->
+            val level = typhoon.currentIntensity()
+            val last = typhoon.latestPoint()
+            val distanceKm = if (userLocation != null && last != null) {
+                haversineKm(userLocation.latitude, userLocation.longitude, last.lat, last.lng)
+            } else {
+                null
+            }
+
+            // With user location: only notify intensity for storms within range
+            // (or still Super typhoons which are regionally significant).
+            if (userLocation != null && distanceKm != null) {
+                val nearby = distanceKm <= NEARBY_STORM_KM
+                val isSuper = level == IntensityLevel.SUPER
+                if (!nearby && !isSuper) return@mapNotNull null
+            }
+
+            val severity = when (level) {
+                IntensityLevel.SUPER -> AlertSeverity.Extreme
+                IntensityLevel.STY -> AlertSeverity.Severe
+                IntensityLevel.TY -> AlertSeverity.Moderate
+                else -> {
+                    // Near-user weaker systems still get a minor heads-up.
+                    if (userLocation != null && distanceKm != null && distanceKm <= NEARBY_STORM_KM) {
+                        AlertSeverity.Minor
+                    } else {
+                        return@mapNotNull null
+                    }
+                }
+            }
+
+            val color = when (severity) {
+                AlertSeverity.Extreme -> "red"
+                AlertSeverity.Severe -> "orange"
+                AlertSeverity.Moderate -> "yellow"
+                else -> "blue"
+            }
+            val intensityLabel = level.label(appContext)
+            val distanceText = distanceKm?.let { km ->
+                appContext.getString(R.string.alert_distance_km, km.roundToInt())
+            }.orEmpty()
+
+            EmergencyAlert(
+                id = "intensity-${typhoon.id}-${level.name}",
+                title = appContext.getString(
+                    R.string.intensity_alert_title,
+                    typhoon.name,
+                    intensityLabel
+                ),
+                body = buildString {
+                    append(appContext.getString(R.string.intensity_alert_body, intensityLabel))
+                    if (distanceText.isNotBlank()) {
+                        append("，").append(distanceText)
+                    }
+                    last?.let {
+                        append("，${appContext.getString(R.string.wind_speed)} ${it.speed} m/s，")
+                        append("${appContext.getString(R.string.pressure)} ${it.pressure} hPa")
+                    }
+                    if (typhoon.positionDesc.isNotBlank()) {
+                        append("。${typhoon.positionDesc}")
+                    }
+                    userLocation?.label?.takeIf { it.isNotBlank() }?.let { place ->
+                        append("。")
+                        append(appContext.getString(R.string.alert_relative_to_you, place))
+                    }
+                },
+                sender = appContext.getString(R.string.app_name),
+                eventName = appContext.getString(R.string.intensity_ty),
+                severity = severity,
+                colorCode = color,
+                source = AlertSource.Intensity,
+                relatedTyphoonId = typhoon.id
+            )
+        }
+    }
+
+    /** Demo / offline sample alerts for preview. */
+    override fun demoAlerts(): List<EmergencyAlert> = listOf(
+        EmergencyAlert(
+            id = "demo-typhoon-red-202609",
+            title = "浙江省气象台发布台风红色预警信号",
+            body = "受台风“巴威”影响，预计未来 24 小时我省沿海将出现 12～14 级大风，请立即进入应急防御状态。",
+            sender = "浙江省气象台",
+            eventName = "台风",
+            severity = AlertSeverity.Extreme,
+            colorCode = "red",
+            instruction = "停止户外活动，加固门窗，渔船回港避风，关注后续路径。",
+            source = AlertSource.Official,
+            relatedTyphoonId = "202609"
+        ),
+        EmergencyAlert(
+            id = "demo-typhoon-orange-202609",
+            title = "福建省气象台发布台风橙色预警信号",
+            body = "“巴威”继续向西北移动，我省东部海域将出现 10～12 级大风，请加强防范。",
+            sender = "福建省气象台",
+            eventName = "台风",
+            severity = AlertSeverity.Severe,
+            colorCode = "orange",
+            source = AlertSource.Official,
+            relatedTyphoonId = "202609"
+        )
+    )
+
+    companion object {
+        private const val TAG = "WarningRepository"
+        /** Intensity push radius when user location is known. */
+        private const val NEARBY_STORM_KM = 800.0
+
+        /** SE China / nearby coastal watchpoints when GPS is unavailable. */
+        private val COASTAL_WATCHPOINTS = listOf(
+            Triple(22.28, 114.16, "香港"),
+            Triple(22.54, 114.06, "深圳"),
+            Triple(23.13, 113.26, "广州"),
+            Triple(21.27, 110.36, "湛江"),
+            Triple(20.03, 110.35, "海口"),
+            Triple(24.48, 118.09, "厦门"),
+            Triple(26.08, 119.30, "福州"),
+            Triple(28.00, 120.65, "温州"),
+            Triple(30.00, 122.10, "舟山"),
+            Triple(31.23, 121.47, "上海"),
+            Triple(25.03, 121.57, "台北"),
+            Triple(35.10, 129.04, "釜山")
+        )
+
+        private fun buildWatchPoints(
+            activeTyphoons: List<Typhoon>,
+            userLocation: UserLocation?
+        ): List<Triple<Double, Double, String>> {
+            val fromStorms = activeTyphoons.mapNotNull { t ->
+                val p = t.latestPoint() ?: return@mapNotNull null
+                if (p.lat == 0.0 && p.lng == 0.0) return@mapNotNull null
+                Triple(
+                    (p.lat * 100).roundToInt() / 100.0,
+                    (p.lng * 100).roundToInt() / 100.0,
+                    t.name
+                )
+            }
+
+            if (userLocation != null && userLocation.isValid) {
+                val userPoint = Triple(
+                    (userLocation.latitude * 100).roundToInt() / 100.0,
+                    (userLocation.longitude * 100).roundToInt() / 100.0,
+                    userLocation.label.ifBlank { "me" }
+                )
+                // User position first + storm centers only (skip full coastal fan-out).
+                return (listOf(userPoint) + fromStorms).distinctBy { "${it.first}|${it.second}" }
+            }
+
+            return (fromStorms + COASTAL_WATCHPOINTS).distinctBy { "${it.first}|${it.second}" }
+        }
+
+        /** Great-circle distance in kilometers. */
+        fun haversineKm(lat1: Double, lon1: Double, lat2: Double, lon2: Double): Double {
+            val r = 6371.0
+            val dLat = Math.toRadians(lat2 - lat1)
+            val dLon = Math.toRadians(lon2 - lon1)
+            val a = sin(dLat / 2) * sin(dLat / 2) +
+                cos(Math.toRadians(lat1)) * cos(Math.toRadians(lat2)) *
+                sin(dLon / 2) * sin(dLon / 2)
+            val c = 2 * atan2(sqrt(a), sqrt(1 - a))
+            return r * c
+        }
+    }
+}

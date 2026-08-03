@@ -18,12 +18,14 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
-import seamain.org.typhoonEye.data.model.Typhoon
-import seamain.org.typhoonEye.data.model.TyphoonPoint
+import seamain.org.typhoonEye.data.preferences.UserSettings
+import seamain.org.typhoonEye.domain.model.Typhoon
+import seamain.org.typhoonEye.domain.model.TyphoonPoint
 import seamain.org.typhoonEye.ui.DataMode
 import seamain.org.typhoonEye.ui.TyphoonUiState
 import seamain.org.typhoonEye.ui.screens.DetailScreen
 import seamain.org.typhoonEye.ui.screens.HomeScreen
+import seamain.org.typhoonEye.ui.screens.SettingsScreen
 import seamain.org.typhoonEye.ui.theme.TyphoonEyeTheme
 
 /**
@@ -94,11 +96,12 @@ class UiUxComposeTest {
                         query = "",
                         intensityFilter = null,
                         dataMode = DataMode.Demo,
-                        lastUpdated = "14:32:01",
+                        lastUpdated = "14:32",
                         onQueryChange = {},
                         onFilterChange = {},
                         onRefresh = {},
                         onLoadDemo = {},
+                        onOpenSettings = {},
                         onTyphoonClick = {},
                         modifier = Modifier.fillMaxSize()
                     )
@@ -108,14 +111,15 @@ class UiUxComposeTest {
 
         assertHasText("台风眼")
         assertHasText("巴威")
-        assertHasText("活跃 2")
+        assertHasText("共 2 · 活跃 2")
         assertHasContentDescription("搜索台风")
         assertHasContentDescription("刷新")
+        assertHasContentDescription("设置")
         assertHasContentDescription("台风 巴威，台风")
     }
 
     @Test
-    fun homeScreen_emptyState_showsDemoAction() {
+    fun homeScreen_emptyState_showsReloadAction() {
         composeRule.setContent {
             Box(modifier = Modifier.size(412.dp, 915.dp)) {
                 TyphoonEyeTheme {
@@ -131,6 +135,7 @@ class UiUxComposeTest {
                         onFilterChange = {},
                         onRefresh = {},
                         onLoadDemo = {},
+                        onOpenSettings = {},
                         onTyphoonClick = {},
                         modifier = Modifier.fillMaxSize()
                     )
@@ -139,6 +144,7 @@ class UiUxComposeTest {
         }
 
         assertHasText("当前暂无活跃台风")
+        assertHasText("重新加载")
         assertHasText("加载演示数据")
     }
 
@@ -159,6 +165,7 @@ class UiUxComposeTest {
                         onFilterChange = {},
                         onRefresh = {},
                         onLoadDemo = {},
+                        onOpenSettings = {},
                         onTyphoonClick = {},
                         modifier = Modifier.fillMaxSize()
                     )
@@ -189,6 +196,7 @@ class UiUxComposeTest {
                         onFilterChange = {},
                         onRefresh = {},
                         onLoadDemo = {},
+                        onOpenSettings = {},
                         onTyphoonClick = {},
                         modifier = Modifier.fillMaxSize()
                     )
@@ -218,6 +226,7 @@ class UiUxComposeTest {
                         onFilterChange = {},
                         onRefresh = {},
                         onLoadDemo = {},
+                        onOpenSettings = {},
                         onTyphoonClick = { clickedId = it.id },
                         modifier = Modifier.fillMaxSize()
                     )
@@ -227,6 +236,38 @@ class UiUxComposeTest {
 
         composeRule.onNodeWithContentDescription("台风 巴威，台风").performClick()
         assert(clickedId == "202609")
+    }
+
+    @Test
+    fun settingsScreen_showsLiveActivityToggle() {
+        composeRule.setContent {
+            Box(modifier = Modifier.size(412.dp, 915.dp)) {
+                TyphoonEyeTheme {
+                    SettingsScreen(
+                        settings = UserSettings(),
+                        notificationsGranted = true,
+                        locationPermissionGranted = true,
+                        onBack = {},
+                        onThemeModeChange = {},
+                        onAppLanguageChange = {},
+                        onLiveActivityChange = {},
+                        onEmergencyAlertsChange = {},
+                        onLocationAlertsChange = {},
+                        onDynamicColorChange = {},
+                        onRequestNotificationPermission = {},
+                        onRequestLocationPermission = {},
+                        modifier = Modifier.fillMaxSize()
+                    )
+                }
+            }
+        }
+
+        assertHasText("设置")
+        assertHasText("台风 Live 状态")
+        assertHasContentDescription("台风 Live 状态开关")
+        assertHasText("基于定位推送")
+        assertHasContentDescription("基于定位推送预警开关")
+        assertHasText("主题")
     }
 
     @Test
@@ -276,7 +317,7 @@ class UiUxComposeTest {
         }
 
         composeRule.onNodeWithText("路径图").performClick()
-        assertHasText("路径示意")
+        assertHasText("路径地图")
     }
 
     @Test

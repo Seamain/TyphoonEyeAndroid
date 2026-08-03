@@ -29,3 +29,7 @@ QWEATHER_API_KEY=your_qweather_api_key_here
 # QWEATHER_KID=your_credential_id
 # QWEATHER_PROJECT_ID=your_project_id
 # QWEATHER_PRIVATE_KEY=-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----
+
+# ---------- 地图底图（可选）----------
+# 默认使用 app/src/main/assets/map_style.json（Carto Voyager 栅格，无需 Key）
+# MAPLIBRE_STYLE_URL=https://demotiles.maplibre.org/style.json

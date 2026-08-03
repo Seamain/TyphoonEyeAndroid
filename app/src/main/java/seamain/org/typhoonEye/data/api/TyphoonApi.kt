@@ -1,9 +1,11 @@
 package seamain.org.typhoonEye.data.api
 
 import retrofit2.http.GET
+import retrofit2.http.Path
 import retrofit2.http.Query
 import seamain.org.typhoonEye.data.model.JuheActiveListResponse
 import seamain.org.typhoonEye.data.model.JuheDetailResponse
+import seamain.org.typhoonEye.data.model.QWeatherAlertResponse
 import seamain.org.typhoonEye.data.model.QWeatherStormForecastResponse
 import seamain.org.typhoonEye.data.model.QWeatherStormListResponse
 import seamain.org.typhoonEye.data.model.QWeatherStormTrackResponse
@@ -55,4 +57,18 @@ interface QWeatherTyphoonApi {
     suspend fun getStormForecast(
         @Query("stormid") stormId: String
     ): QWeatherStormForecastResponse
+}
+
+/**
+ * 和风天气 Warning API — 官方气象预警（含台风信号）
+ * GET /weatheralert/v1/current/{latitude}/{longitude}
+ */
+interface QWeatherWarningApi {
+    @GET("weatheralert/v1/current/{latitude}/{longitude}")
+    suspend fun getCurrentAlerts(
+        @Path("latitude") latitude: String,
+        @Path("longitude") longitude: String,
+        @Query("lang") lang: String = "zh",
+        @Query("localTime") localTime: Boolean = true
+    ): QWeatherAlertResponse
 }

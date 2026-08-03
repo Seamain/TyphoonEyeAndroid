@@ -1,9 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <style name="Theme.TyphoonEye" parent="android:Theme.Material.Light.NoActionBar">
+    <!-- AppCompat parent required for AppCompatDelegate.setApplicationLocales(). -->
+    <style name="Theme.TyphoonEye" parent="Theme.AppCompat.Light.NoActionBar">
         <item name="android:statusBarColor">@android:color/transparent</item>
         <item name="android:navigationBarColor">@android:color/transparent</item>
         <item name="android:windowLightStatusBar">true</item>
         <item name="android:colorBackground">@color/ocean_deep</item>
+        <item name="colorPrimary">@color/ocean_deep</item>
+        <item name="colorPrimaryDark">@color/ocean_deep</item>
     </style>
 </resources>

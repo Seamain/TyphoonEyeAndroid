@@ -2,38 +2,8 @@ package seamain.org.typhoonEye.data.model
 
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
-
-/**
- * Domain model representing a typhoon / tropical cyclone.
- */
-data class Typhoon(
-    val id: String,
-    val name: String,
-    val englishName: String,
-    val status: String, // "active" | "dissipated"
-    val strong: String = "",
-    val positionDesc: String = "",
-    val forecastText: String = "",
-    val startTime: String = "",
-    val endTime: String = "",
-    val points: List<TyphoonPoint> = emptyList(),
-    val forecastPoints: List<TyphoonPoint> = emptyList()
-)
-
-data class TyphoonPoint(
-    val time: String,
-    val lat: Double,
-    val lng: Double,
-    val pressure: Int,
-    val speed: Int,
-    val power: String,
-    val strong: String = "",
-    val moveDirection: String = "",
-    val moveSpeed: String = "",
-    val radius7: String = "",
-    val radius10: String = "",
-    val radius12: String = ""
-)
+import seamain.org.typhoonEye.domain.model.Typhoon
+import seamain.org.typhoonEye.domain.model.TyphoonPoint
 
 // region Juhe API (apis.juhe.cn/fapigw)
 // Active list returns data as array; detail returns data as object.

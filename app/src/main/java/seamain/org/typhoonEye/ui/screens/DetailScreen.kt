@@ -1,9 +1,6 @@
 package seamain.org.typhoonEye.ui.screens
 
 import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -18,6 +15,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Air
@@ -35,11 +35,11 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.MediumTopAppBar
+import androidx.compose.material3.PrimaryTabRow
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SecondaryScrollableTabRow
 import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -50,25 +50,33 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import seamain.org.typhoonEye.data.model.Typhoon
+import seamain.org.typhoonEye.R
+import seamain.org.typhoonEye.domain.model.Typhoon
+import seamain.org.typhoonEye.domain.model.TyphoonPoint
 import seamain.org.typhoonEye.ui.components.IntensityBadge
 import seamain.org.typhoonEye.ui.components.MetricGrid
 import seamain.org.typhoonEye.ui.components.MetricItem
 import seamain.org.typhoonEye.ui.components.PointTimelineItem
 import seamain.org.typhoonEye.ui.components.StatusChip
 import seamain.org.typhoonEye.ui.components.TrackMapCard
+import seamain.org.typhoonEye.ui.theme.Motion
 import seamain.org.typhoonEye.ui.theme.TyphoonEyeTheme
 import seamain.org.typhoonEye.ui.util.currentIntensity
+import seamain.org.typhoonEye.ui.util.displayLabel
 import seamain.org.typhoonEye.ui.util.formatCoordinate
+import seamain.org.typhoonEye.ui.util.formatObservationTime
 import seamain.org.typhoonEye.ui.util.latestPoint
 import seamain.org.typhoonEye.ui.util.moveLabel
-
+import seamain.org.typhoonEye.ui.util.windRadii10
+import seamain.org.typhoonEye.ui.util.windRadii12
+import seamain.org.typhoonEye.ui.util.windRadii7
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DetailScreen(
@@ -80,19 +88,25 @@ fun DetailScreen(
     modifier: Modifier = Modifier
 ) {
     var tabIndex by rememberSaveable { mutableIntStateOf(0) }
-    val tabs = listOf("概况", "路径图", "历史", "预报")
+    val tabs = listOf(
+        stringResource(R.string.overview),
+        stringResource(R.string.track_map),
+        stringResource(R.string.tab_history),
+        stringResource(R.string.tab_forecast)
+    )
     val last = typhoon.latestPoint()
-    val intensity = typhoon.currentIntensity()
-    val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
+    val detailCd = stringResource(R.string.cd_typhoon_detail, typhoon.name)
+    val backCd = stringResource(R.string.back)
+    val shareCd = stringResource(R.string.share_summary)
+    val loadingDetailCd = stringResource(R.string.cd_loading_detail)
 
     Scaffold(
         modifier = modifier
             .fillMaxSize()
-            .nestedScroll(scrollBehavior.nestedScrollConnection)
-            .semantics { contentDescription = "台风详情 ${typhoon.name}" },
+            .semantics { contentDescription = detailCd },
         containerColor = MaterialTheme.colorScheme.surfaceContainerLowest,
         topBar = {
-            MediumTopAppBar(
+            TopAppBar(
                 title = {
                     Column {
                         Text(typhoon.name, fontWeight = FontWeight.SemiBold)
@@ -106,7 +120,7 @@ fun DetailScreen(
                 navigationIcon = {
                     IconButton(
                         onClick = onBack,
-                        modifier = Modifier.semantics { contentDescription = "返回" }
+                        modifier = Modifier.semantics { contentDescription = backCd }
                     ) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null)
                     }
@@ -114,84 +128,92 @@ fun DetailScreen(
                 actions = {
                     FilledTonalIconButton(
                         onClick = { onShare(shareText) },
-                        modifier = Modifier.semantics { contentDescription = "分享概况" }
+                        modifier = Modifier.semantics { contentDescription = shareCd }
                     ) {
                         Icon(Icons.Filled.Share, contentDescription = null)
                     }
                 },
-                colors = TopAppBarDefaults.mediumTopAppBarColors(
+                colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.surfaceContainerLowest,
                     scrolledContainerColor = MaterialTheme.colorScheme.surfaceContainer
-                ),
-                scrollBehavior = scrollBehavior
+                )
             )
         }
     ) { padding ->
-        LazyColumn(
+        Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(padding),
-            contentPadding = PaddingValues(bottom = 32.dp)
+                .padding(padding)
         ) {
-            item {
-                DetailHero(typhoon = typhoon, intensityLabel = intensity.label)
-            }
+            DetailHero(typhoon = typhoon)
 
             if (loading) {
-                item {
-                    LinearProgressIndicator(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .semantics { contentDescription = "正在补全路径详情" }
+                LinearProgressIndicator(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .semantics { contentDescription = loadingDetailCd }
+                )
+            }
+
+            // Fixed PrimaryTabRow — 4 short labels fit without scrolling (M3)
+            PrimaryTabRow(
+                selectedTabIndex = tabIndex,
+                containerColor = MaterialTheme.colorScheme.surfaceContainerLowest,
+                modifier = Modifier.padding(top = 4.dp)
+            ) {
+                tabs.forEachIndexed { index, title ->
+                    Tab(
+                        selected = tabIndex == index,
+                        onClick = { tabIndex = index },
+                        text = { Text(title) }
                     )
                 }
             }
 
-            item {
-                SecondaryScrollableTabRow(
-                    selectedTabIndex = tabIndex,
-                    edgePadding = 16.dp,
-                    containerColor = MaterialTheme.colorScheme.surfaceContainerLowest
-                ) {
-                    tabs.forEachIndexed { index, title ->
-                        Tab(
-                            selected = tabIndex == index,
-                            onClick = { tabIndex = index },
-                            text = { Text(title) }
-                        )
+            AnimatedContent(
+                targetState = tabIndex,
+                transitionSpec = {
+                    if (targetState > initialState) {
+                        Motion.sharedAxisXForward()
+                    } else {
+                        Motion.sharedAxisXBackward()
                     }
-                }
-                Spacer(modifier = Modifier.height(8.dp))
-            }
-
-            item {
-                AnimatedContent(
-                    targetState = tabIndex,
-                    transitionSpec = { fadeIn() togetherWith fadeOut() },
-                    label = "detail-tab"
-                ) { index ->
-                    when (index) {
-                        0 -> OverviewTab(typhoon = typhoon, loading = loading, last = last)
-                        1 -> TrackMapCard(
-                            history = typhoon.points,
-                            forecast = typhoon.forecastPoints,
-                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
-                        )
-                        2 -> TimelineTab(
-                            title = "历史路径",
-                            subtitle = "共 ${typhoon.points.size} 个观测点（由新到旧）",
-                            points = typhoon.points.asReversed(),
-                            isForecast = false,
-                            emptyText = "暂无历史路径数据"
-                        )
-                        else -> TimelineTab(
-                            title = "预报路径",
-                            subtitle = "共 ${typhoon.forecastPoints.size} 个预报点",
-                            points = typhoon.forecastPoints,
-                            isForecast = true,
-                            emptyText = "暂无预报路径数据"
-                        )
-                    }
+                },
+                label = "detail-tab",
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth()
+            ) { index ->
+                when (index) {
+                    0 -> OverviewTab(
+                        typhoon = typhoon,
+                        loading = loading,
+                        last = last,
+                        modifier = Modifier.fillMaxSize()
+                    )
+                    1 -> TrackMapCard(
+                        history = typhoon.points,
+                        forecast = typhoon.forecastPoints,
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(horizontal = 16.dp, vertical = 12.dp)
+                    )
+                    2 -> TimelineTab(
+                        title = stringResource(R.string.history_track),
+                        subtitle = stringResource(R.string.history_points_subtitle, typhoon.points.size),
+                        points = typhoon.points.asReversed(),
+                        isForecast = false,
+                        emptyText = stringResource(R.string.history_empty),
+                        modifier = Modifier.fillMaxSize()
+                    )
+                    else -> TimelineTab(
+                        title = stringResource(R.string.forecast_track),
+                        subtitle = stringResource(R.string.forecast_points_subtitle, typhoon.forecastPoints.size),
+                        points = typhoon.forecastPoints,
+                        isForecast = true,
+                        emptyText = stringResource(R.string.forecast_empty),
+                        modifier = Modifier.fillMaxSize()
+                    )
                 }
             }
         }
@@ -202,9 +224,15 @@ fun DetailScreen(
 private fun OverviewTab(
     typhoon: Typhoon,
     loading: Boolean,
-    last: seamain.org.typhoonEye.data.model.TyphoonPoint?
+    last: TyphoonPoint?,
+    modifier: Modifier = Modifier
 ) {
-    Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+    val context = LocalContext.current
+    Column(
+        modifier = modifier
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = 16.dp, vertical = 12.dp)
+    ) {
         if (loading) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
@@ -213,7 +241,7 @@ private fun OverviewTab(
                 CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
-                    text = "正在补全路径详情…",
+                    text = stringResource(R.string.loading_detail),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -223,30 +251,64 @@ private fun OverviewTab(
         MetricGrid(
             items = listOf(
                 MetricItem(
-                    label = "中心风速",
+                    label = stringResource(R.string.wind_speed),
                     value = last?.let { "${it.speed} m/s" } ?: "—",
                     icon = Icons.Filled.Air
                 ),
                 MetricItem(
-                    label = "中心气压",
+                    label = stringResource(R.string.pressure),
                     value = last?.let { "${it.pressure} hPa" } ?: "—",
                     icon = Icons.Filled.Speed
                 ),
                 MetricItem(
-                    label = "移动",
-                    value = last?.moveLabel() ?: "—",
+                    label = stringResource(R.string.move),
+                    value = last?.moveLabel(context) ?: "—",
                     icon = Icons.Filled.Explore
                 ),
                 MetricItem(
-                    label = "位置",
+                    label = stringResource(R.string.location),
                     value = last?.let { formatCoordinate(it.lat, it.lng) } ?: "—",
                     icon = Icons.Filled.Place
                 )
             )
         )
 
+        last?.let { point ->
+            val r7 = point.windRadii7()
+            val r10 = point.windRadii10()
+            val r12 = point.windRadii12()
+            if (r7 != null || r10 != null || r12 != null) {
+                Spacer(modifier = Modifier.height(12.dp))
+                Card(
+                    shape = MaterialTheme.shapes.large,
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
+                    ),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+                ) {
+                    Column(modifier = Modifier.padding(14.dp)) {
+                        Text(
+                            text = stringResource(R.string.wind_radius_title),
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        r7?.let {
+                            InfoRow(label = stringResource(R.string.wind_radius_7), value = it.displayLabel())
+                        }
+                        r10?.let {
+                            InfoRow(label = stringResource(R.string.wind_radius_10), value = it.displayLabel())
+                        }
+                        r12?.let {
+                            InfoRow(label = stringResource(R.string.wind_radius_12), value = it.displayLabel())
+                        }
+                    }
+                }
+            }
+        }
+
         if (typhoon.forecastText.isNotBlank()) {
-            Spacer(modifier = Modifier.height(14.dp))
+            Spacer(modifier = Modifier.height(12.dp))
             Card(
                 shape = MaterialTheme.shapes.large,
                 colors = CardDefaults.cardColors(
@@ -254,14 +316,14 @@ private fun OverviewTab(
                 ),
                 elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
             ) {
-                Column(modifier = Modifier.padding(16.dp)) {
+                Column(modifier = Modifier.padding(14.dp)) {
                     Text(
-                        text = "预报要点",
+                        text = stringResource(R.string.forecast_bulletin),
                         style = MaterialTheme.typography.titleSmall,
                         fontWeight = FontWeight.SemiBold,
                         color = MaterialTheme.colorScheme.onTertiaryContainer
                     )
-                    Spacer(modifier = Modifier.height(8.dp))
+                    Spacer(modifier = Modifier.height(6.dp))
                     Text(
                         text = typhoon.forecastText,
                         style = MaterialTheme.typography.bodyMedium,
@@ -271,18 +333,23 @@ private fun OverviewTab(
             }
         }
 
-        Spacer(modifier = Modifier.height(14.dp))
-        InfoRow(label = "编号", value = typhoon.id)
+        Spacer(modifier = Modifier.height(12.dp))
+        InfoRow(label = stringResource(R.string.label_id), value = typhoon.id)
         if (typhoon.startTime.isNotBlank()) {
-            InfoRow(label = "生成时间", value = typhoon.startTime)
+            InfoRow(label = stringResource(R.string.label_start_time), value = formatObservationTime(typhoon.startTime))
         }
         if (typhoon.endTime.isNotBlank()) {
-            InfoRow(label = "最新时次", value = typhoon.endTime)
+            InfoRow(label = stringResource(R.string.label_latest_time), value = formatObservationTime(typhoon.endTime))
         }
         InfoRow(
-            label = "路径点",
-            value = "历史 ${typhoon.points.size} · 预报 ${typhoon.forecastPoints.size}"
+            label = stringResource(R.string.label_track_points),
+            value = stringResource(
+                R.string.track_points_summary,
+                typhoon.points.size,
+                typhoon.forecastPoints.size
+            )
         )
+        Spacer(modifier = Modifier.height(16.dp))
     }
 }
 
@@ -290,33 +357,39 @@ private fun OverviewTab(
 private fun TimelineTab(
     title: String,
     subtitle: String,
-    points: List<seamain.org.typhoonEye.data.model.TyphoonPoint>,
+    points: List<TyphoonPoint>,
     isForecast: Boolean,
-    emptyText: String
+    emptyText: String,
+    modifier: Modifier = Modifier
 ) {
-    Column {
-        SectionHeader(
-            title = title,
-            subtitle = subtitle,
-            icon = Icons.Filled.Timeline
-        )
-        if (points.isEmpty()) {
+    if (points.isEmpty()) {
+        Column(modifier = modifier) {
+            SectionHeader(title = title, subtitle = subtitle, icon = Icons.Filled.Timeline)
             EmptySection(emptyText)
-        } else {
-            points.forEachIndexed { index, point ->
-                PointTimelineItem(
-                    point = point,
-                    isForecast = isForecast,
-                    showConnector = index != points.lastIndex,
-                    modifier = Modifier.padding(horizontal = 16.dp)
-                )
-            }
+        }
+        return
+    }
+
+    LazyColumn(
+        modifier = modifier,
+        contentPadding = PaddingValues(bottom = 24.dp)
+    ) {
+        item {
+            SectionHeader(title = title, subtitle = subtitle, icon = Icons.Filled.Timeline)
+        }
+        itemsIndexed(points, key = { index, point -> "${point.time}-$index" }) { index, point ->
+            PointTimelineItem(
+                point = point,
+                isForecast = isForecast,
+                showConnector = index != points.lastIndex,
+                modifier = Modifier.padding(horizontal = 16.dp)
+            )
         }
     }
 }
 
 @Composable
-private fun DetailHero(typhoon: Typhoon, intensityLabel: String) {
+private fun DetailHero(typhoon: Typhoon) {
     val intensity = typhoon.currentIntensity()
     val scheme = MaterialTheme.colorScheme
     Box(
@@ -327,7 +400,7 @@ private fun DetailHero(typhoon: Typhoon, intensityLabel: String) {
                     listOf(scheme.primaryContainer, scheme.secondaryContainer)
                 )
             )
-            .padding(20.dp)
+            .padding(horizontal = 16.dp, vertical = 14.dp)
     ) {
         Column {
             Row(
@@ -338,27 +411,14 @@ private fun DetailHero(typhoon: Typhoon, intensityLabel: String) {
                 IntensityBadge(level = intensity)
                 StatusChip(active = typhoon.status == "active")
             }
-            Spacer(modifier = Modifier.height(14.dp))
-            Text(
-                text = typhoon.name,
-                style = MaterialTheme.typography.headlineMedium,
-                color = scheme.onPrimaryContainer,
-                fontWeight = FontWeight.Bold
-            )
-            Text(
-                text = listOfNotNull(
-                    typhoon.englishName.takeIf { it.isNotBlank() },
-                    intensityLabel.takeIf { it.isNotBlank() }
-                ).joinToString(" · "),
-                style = MaterialTheme.typography.bodyMedium,
-                color = scheme.onPrimaryContainer.copy(alpha = 0.85f)
-            )
+            // Name lives in TopAppBar — hero only shows location context
             if (typhoon.positionDesc.isNotBlank()) {
                 Spacer(modifier = Modifier.height(10.dp))
                 Text(
                     text = typhoon.positionDesc,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = scheme.onPrimaryContainer.copy(alpha = 0.9f)
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = scheme.onPrimaryContainer,
+                    fontWeight = FontWeight.Medium
                 )
             }
         }
@@ -372,7 +432,7 @@ private fun SectionHeader(
     icon: ImageVector
 ) {
     Row(
-        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+        modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Icon(
@@ -397,7 +457,7 @@ private fun InfoRow(label: String, value: String) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 4.dp),
+            .padding(vertical = 3.dp),
         shape = MaterialTheme.shapes.medium,
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
@@ -407,8 +467,9 @@ private fun InfoRow(label: String, value: String) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 14.dp, vertical = 12.dp),
-            horizontalArrangement = Arrangement.SpaceBetween
+                .padding(horizontal = 14.dp, vertical = 11.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
                 text = label,

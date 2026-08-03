@@ -1,165 +1,456 @@
 package seamain.org.typhoonEye
 
+import android.Manifest
 import android.content.Intent
+import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
-import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.appcompat.app.AppCompatActivity
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.lifecycle.ViewModel
-import androidx.lifecycle.ViewModelProvider
-import androidx.lifecycle.viewmodel.CreationExtras
+import androidx.compose.ui.res.stringResource
+import androidx.core.content.ContextCompat
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.jakewharton.retrofit2.converter.kotlinx.serialization.asConverterFactory
-import kotlinx.serialization.json.Json
-import okhttp3.MediaType.Companion.toMediaType
-import okhttp3.OkHttpClient
-import okhttp3.logging.HttpLoggingInterceptor
-import retrofit2.Retrofit
-import seamain.org.typhoonEye.data.api.JuheTyphoonApi
-import seamain.org.typhoonEye.data.api.QWeatherAuthInterceptor
-import seamain.org.typhoonEye.data.api.QWeatherTyphoonApi
-import seamain.org.typhoonEye.data.repository.TyphoonRepository
+import androidx.navigation.NavType
+import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.composable
+import androidx.navigation.compose.rememberNavController
+import androidx.navigation.navArgument
+import dagger.hilt.android.AndroidEntryPoint
+import kotlinx.coroutines.flow.MutableStateFlow
+import org.maplibre.android.MapLibre
+import seamain.org.typhoonEye.data.preferences.ThemeMode
+import seamain.org.typhoonEye.live.TyphoonLiveNotifier
+import seamain.org.typhoonEye.live.TyphoonLiveUpdateWorker
 import seamain.org.typhoonEye.ui.TyphoonViewModel
+import seamain.org.typhoonEye.ui.navigation.AppDestination
 import seamain.org.typhoonEye.ui.screens.DetailScreen
 import seamain.org.typhoonEye.ui.screens.HomeScreen
+import seamain.org.typhoonEye.ui.screens.SettingsScreen
+import seamain.org.typhoonEye.ui.theme.Motion
 import seamain.org.typhoonEye.ui.theme.TyphoonEyeTheme
 
-class MainActivity : ComponentActivity() {
+private val LOCATION_PERMISSIONS = arrayOf(
+    Manifest.permission.ACCESS_COARSE_LOCATION,
+    Manifest.permission.ACCESS_FINE_LOCATION
+)
+
+@AndroidEntryPoint
+class MainActivity : AppCompatActivity() {
+
+    private val pendingTyphoonId = MutableStateFlow<String?>(null)
+    private val pendingLoadDemo = MutableStateFlow(false)
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        MapLibre.getInstance(this)
 
-        val repository = createRepository()
-        val viewModelFactory = TyphoonViewModelFactory(repository)
+        pendingTyphoonId.value = intent?.getStringExtra(TyphoonLiveNotifier.EXTRA_TYPHOON_ID)
+        pendingLoadDemo.value = intent?.getBooleanExtra(EXTRA_LOAD_DEMO, false) == true
 
         setContent {
-            TyphoonEyeTheme {
+            // @AndroidEntryPoint supplies the Hilt ViewModel factory automatically.
+            val typhoonVm: TyphoonViewModel = viewModel()
+            val settings by typhoonVm.settings.collectAsStateWithLifecycle()
+            val deepLinkId by pendingTyphoonId.collectAsStateWithLifecycle()
+            val loadDemo by pendingLoadDemo.collectAsStateWithLifecycle()
+            val systemDark = isSystemInDarkTheme()
+            val darkTheme = when (settings.themeMode) {
+                ThemeMode.System -> systemDark
+                ThemeMode.Light -> false
+                ThemeMode.Dark -> true
+            }
+
+            TyphoonEyeTheme(
+                darkTheme = darkTheme,
+                dynamicColor = settings.dynamicColorEnabled
+            ) {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.surfaceContainerLowest
                 ) {
-                    TyphoonApp(viewModelFactory)
+                    TyphoonApp(
+                        viewModel = typhoonVm,
+                        deepLinkTyphoonId = deepLinkId,
+                        onDeepLinkConsumed = { pendingTyphoonId.value = null },
+                        loadDemoRequested = loadDemo,
+                        onLoadDemoConsumed = { pendingLoadDemo.value = false }
+                    )
                 }
             }
         }
     }
 
-    private fun createRepository(): TyphoonRepository {
-        val json = Json {
-            ignoreUnknownKeys = true
-            isLenient = true
-            coerceInputValues = true
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        pendingTyphoonId.value = intent.getStringExtra(TyphoonLiveNotifier.EXTRA_TYPHOON_ID)
+        if (intent.getBooleanExtra(EXTRA_LOAD_DEMO, false)) {
+            pendingLoadDemo.value = true
         }
-        val mediaType = "application/json".toMediaType()
-        val logging = HttpLoggingInterceptor().apply {
-            level = HttpLoggingInterceptor.Level.BASIC
-        }
-
-        val juheClient = OkHttpClient.Builder()
-            .addInterceptor(logging)
-            .build()
-
-        val qWeatherAuth = QWeatherAuthInterceptor(
-            apiKey = BuildConfig.QWEATHER_API_KEY,
-            kid = BuildConfig.QWEATHER_KID,
-            projectId = BuildConfig.QWEATHER_PROJECT_ID,
-            privateKeyPem = BuildConfig.QWEATHER_PRIVATE_KEY
-        )
-
-        val qWeatherClient = OkHttpClient.Builder()
-            .addInterceptor(qWeatherAuth)
-            .addInterceptor(logging)
-            .build()
-
-        val juheRetrofit = Retrofit.Builder()
-            .baseUrl("https://apis.juhe.cn/")
-            .client(juheClient)
-            .addConverterFactory(json.asConverterFactory(mediaType))
-            .build()
-
-        val qWeatherBase = BuildConfig.QWEATHER_HOST.ifBlank {
-            "https://pu6yvrgfbv.re.qweatherapi.com/"
-        }.let { host -> if (host.endsWith("/")) host else "$host/" }
-
-        val qWeatherRetrofit = Retrofit.Builder()
-            .baseUrl(qWeatherBase)
-            .client(qWeatherClient)
-            .addConverterFactory(json.asConverterFactory(mediaType))
-            .build()
-
-        return TyphoonRepository(
-            juheApi = juheRetrofit.create(JuheTyphoonApi::class.java),
-            qWeatherApi = qWeatherRetrofit.create(QWeatherTyphoonApi::class.java),
-            juheKey = BuildConfig.JUHE_KEY,
-            qWeatherConfigured = qWeatherAuth.hasCredentials
-        )
     }
-}
 
-private class TyphoonViewModelFactory(
-    private val repository: TyphoonRepository
-) : ViewModelProvider.Factory {
-    @Suppress("UNCHECKED_CAST")
-    override fun <T : ViewModel> create(modelClass: Class<T>, extras: CreationExtras): T {
-        if (modelClass.isAssignableFrom(TyphoonViewModel::class.java)) {
-            return TyphoonViewModel(repository) as T
-        }
-        throw IllegalArgumentException("Unknown ViewModel class: ${modelClass.name}")
+    companion object {
+        /** Preview: adb … --ez extra_load_demo true */
+        const val EXTRA_LOAD_DEMO = "extra_load_demo"
     }
 }
 
 @Composable
-fun TyphoonApp(factory: ViewModelProvider.Factory) {
-    val viewModel: TyphoonViewModel = viewModel(factory = factory)
-    val uiState by viewModel.uiState.collectAsState()
-    val filtered by viewModel.filteredTyphoons.collectAsState()
-    val selectedTyphoon by viewModel.selectedTyphoon.collectAsState()
-    val detailLoading by viewModel.detailLoading.collectAsState()
-    val isRefreshing by viewModel.isRefreshing.collectAsState()
-    val query by viewModel.query.collectAsState()
-    val intensityFilter by viewModel.intensityFilter.collectAsState()
-    val dataMode by viewModel.dataMode.collectAsState()
-    val lastUpdated by viewModel.lastUpdated.collectAsState()
+fun TyphoonApp(
+    viewModel: TyphoonViewModel,
+    deepLinkTyphoonId: String? = null,
+    onDeepLinkConsumed: () -> Unit = {},
+    loadDemoRequested: Boolean = false,
+    onLoadDemoConsumed: () -> Unit = {}
+) {
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val filtered by viewModel.filteredTyphoons.collectAsStateWithLifecycle()
+    val selectedTyphoon by viewModel.selectedTyphoon.collectAsStateWithLifecycle()
+    val detailLoading by viewModel.detailLoading.collectAsStateWithLifecycle()
+    val isRefreshing by viewModel.isRefreshing.collectAsStateWithLifecycle()
+    val query by viewModel.query.collectAsStateWithLifecycle()
+    val intensityFilter by viewModel.intensityFilter.collectAsStateWithLifecycle()
+    val lastUpdated by viewModel.lastUpdated.collectAsStateWithLifecycle()
+    val dataMode by viewModel.dataMode.collectAsStateWithLifecycle()
+    val settings by viewModel.settings.collectAsStateWithLifecycle()
     val context = LocalContext.current
+    val navController = rememberNavController()
 
-    val current = selectedTyphoon
-    if (current != null) {
-        DetailScreen(
-            typhoon = current,
-            loading = detailLoading,
-            onBack = { viewModel.selectTyphoon(null) },
-            shareText = viewModel.shareSummary(current),
-            onShare = { text ->
-                val intent = Intent(Intent.ACTION_SEND).apply {
-                    type = "text/plain"
-                    putExtra(Intent.EXTRA_SUBJECT, "台风眼 · ${current.name}")
-                    putExtra(Intent.EXTRA_TEXT, text)
-                }
-                context.startActivity(Intent.createChooser(intent, "分享台风概况"))
+    var notificationsGranted by remember {
+        mutableStateOf(viewModel.canPostLiveNotifications())
+    }
+    var locationGranted by remember {
+        mutableStateOf(viewModel.hasLocationPermission())
+    }
+    var askedNotificationPermission by rememberSaveable { mutableStateOf(false) }
+    var askedLocationPermission by rememberSaveable { mutableStateOf(false) }
+
+    val notificationPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        notificationsGranted = granted
+        if (granted) {
+            viewModel.refreshLiveActivity()
+            TyphoonLiveUpdateWorker.schedule(context.applicationContext)
+        }
+    }
+
+    val locationPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) { result ->
+        locationGranted = result.values.any { it } || viewModel.hasLocationPermission()
+        if (locationGranted) {
+            viewModel.refreshUserLocation(force = true)
+        }
+    }
+
+    fun requestNotificationPermission() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
+            notificationsGranted = true
+            viewModel.refreshLiveActivity()
+            TyphoonLiveUpdateWorker.schedule(context.applicationContext)
+            return
+        }
+        val granted = ContextCompat.checkSelfPermission(
+            context,
+            Manifest.permission.POST_NOTIFICATIONS
+        ) == PackageManager.PERMISSION_GRANTED
+        if (granted) {
+            notificationsGranted = true
+            viewModel.refreshLiveActivity()
+            TyphoonLiveUpdateWorker.schedule(context.applicationContext)
+        } else {
+            notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        }
+    }
+
+    fun requestLocationPermission() {
+        if (viewModel.hasLocationPermission()) {
+            locationGranted = true
+            viewModel.refreshUserLocation(force = true)
+            return
+        }
+        locationPermissionLauncher.launch(LOCATION_PERMISSIONS)
+    }
+
+    fun leaveDetail() {
+        viewModel.selectTyphoon(null)
+        navController.popBackStack()
+    }
+
+    LaunchedEffect(deepLinkTyphoonId) {
+        if (!deepLinkTyphoonId.isNullOrBlank()) {
+            viewModel.selectTyphoonById(deepLinkTyphoonId)
+            navController.navigate(AppDestination.detail(deepLinkTyphoonId)) {
+                launchSingleTop = true
             }
-        )
-    } else {
-        HomeScreen(
-            uiState = uiState,
-            filteredTyphoons = filtered,
-            isRefreshing = isRefreshing,
-            query = query,
-            intensityFilter = intensityFilter,
-            dataMode = dataMode,
-            lastUpdated = lastUpdated,
-            onQueryChange = viewModel::setQuery,
-            onFilterChange = viewModel::setIntensityFilter,
-            onRefresh = { viewModel.refresh() },
-            onLoadDemo = { viewModel.refresh(useMock = true) },
-            onTyphoonClick = viewModel::selectTyphoon
-        )
+            onDeepLinkConsumed()
+        }
+    }
+
+    LaunchedEffect(loadDemoRequested) {
+        if (loadDemoRequested) {
+            viewModel.loadDemoData()
+            onLoadDemoConsumed()
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        notificationsGranted = viewModel.canPostLiveNotifications()
+        locationGranted = viewModel.hasLocationPermission()
+        if (locationGranted && settings.locationAlertsEnabled) {
+            viewModel.refreshUserLocation(force = true)
+        }
+    }
+
+    // Request notification permission once when Live 状态 or emergency alerts are enabled.
+    LaunchedEffect(settings.liveActivityEnabled, settings.emergencyAlertsEnabled) {
+        if (!settings.liveActivityEnabled && !settings.emergencyAlertsEnabled) return@LaunchedEffect
+        val allowed = viewModel.canPostLiveNotifications()
+        notificationsGranted = allowed
+        if (allowed) {
+            viewModel.refreshLiveActivity()
+            TyphoonLiveUpdateWorker.schedule(context.applicationContext)
+        } else if (!askedNotificationPermission) {
+            askedNotificationPermission = true
+            requestNotificationPermission()
+        }
+    }
+
+    // One-shot location permission when location-based alerts are on.
+    LaunchedEffect(settings.locationAlertsEnabled, settings.emergencyAlertsEnabled) {
+        if (!settings.locationAlertsEnabled || !settings.emergencyAlertsEnabled) return@LaunchedEffect
+        locationGranted = viewModel.hasLocationPermission()
+        if (locationGranted) {
+            viewModel.refreshUserLocation(force = true)
+        } else if (!askedLocationPermission) {
+            askedLocationPermission = true
+            requestLocationPermission()
+        }
+    }
+
+    NavHost(
+        navController = navController,
+        startDestination = AppDestination.Home,
+        modifier = Modifier.fillMaxSize(),
+        enterTransition = {
+            fadeIn(
+                animationSpec = tween(Motion.DurationMedium2, easing = Motion.EmphasizedDecelerate)
+            )
+        },
+        exitTransition = {
+            fadeOut(
+                animationSpec = tween(Motion.DurationShort4, easing = Motion.EmphasizedAccelerate)
+            )
+        },
+        popEnterTransition = {
+            fadeIn(
+                animationSpec = tween(Motion.DurationMedium2, easing = Motion.EmphasizedDecelerate)
+            )
+        },
+        popExitTransition = {
+            fadeOut(
+                animationSpec = tween(Motion.DurationShort4, easing = Motion.EmphasizedAccelerate)
+            )
+        }
+    ) {
+        composable(AppDestination.Home) {
+            HomeScreen(
+                uiState = uiState,
+                filteredTyphoons = filtered,
+                isRefreshing = isRefreshing,
+                query = query,
+                intensityFilter = intensityFilter,
+                dataMode = dataMode,
+                lastUpdated = lastUpdated,
+                onQueryChange = viewModel::setQuery,
+                onFilterChange = viewModel::setIntensityFilter,
+                onRefresh = { viewModel.refresh() },
+                onLoadDemo = viewModel::loadDemoData,
+                onOpenSettings = {
+                    navController.navigate(AppDestination.Settings) {
+                        launchSingleTop = true
+                    }
+                },
+                onTyphoonClick = { typhoon ->
+                    viewModel.selectTyphoon(typhoon)
+                    navController.navigate(AppDestination.detail(typhoon.id)) {
+                        launchSingleTop = true
+                    }
+                }
+            )
+        }
+
+        composable(AppDestination.Settings) {
+            BackHandler { navController.popBackStack() }
+            SettingsScreen(
+                settings = settings,
+                notificationsGranted = notificationsGranted,
+                locationPermissionGranted = locationGranted,
+                onBack = { navController.popBackStack() },
+                onThemeModeChange = viewModel::setThemeMode,
+                onAppLanguageChange = viewModel::setAppLanguage,
+                onLiveActivityChange = { enabled ->
+                    viewModel.setLiveActivityEnabled(enabled)
+                    if (enabled) requestNotificationPermission()
+                },
+                onEmergencyAlertsChange = { enabled ->
+                    viewModel.setEmergencyAlertsEnabled(enabled)
+                    if (enabled) requestNotificationPermission()
+                },
+                onLocationAlertsChange = { enabled ->
+                    viewModel.setLocationAlertsEnabled(enabled)
+                    if (enabled) requestLocationPermission()
+                },
+                onDynamicColorChange = viewModel::setDynamicColorEnabled,
+                onRequestNotificationPermission = ::requestNotificationPermission,
+                onRequestLocationPermission = ::requestLocationPermission
+            )
+        }
+
+        composable(
+            route = AppDestination.Detail,
+            arguments = listOf(
+                navArgument(AppDestination.ArgTyphoonId) { type = NavType.StringType }
+            )
+        ) { entry ->
+            val typhoonId = entry.arguments?.getString(AppDestination.ArgTyphoonId).orEmpty()
+            var detailRequested by remember(typhoonId) { mutableStateOf(false) }
+
+            LaunchedEffect(typhoonId) {
+                if (typhoonId.isBlank()) return@LaunchedEffect
+                detailRequested = true
+                if (selectedTyphoon?.id != typhoonId) {
+                    viewModel.selectTyphoonById(typhoonId)
+                }
+            }
+
+            val typhoon = selectedTyphoon?.takeIf { it.id == typhoonId }
+            BackHandler(onBack = ::leaveDetail)
+
+            when {
+                typhoon != null -> {
+                    DetailScreen(
+                        typhoon = typhoon,
+                        loading = detailLoading,
+                        onBack = ::leaveDetail,
+                        shareText = viewModel.shareSummary(typhoon),
+                        onShare = { text ->
+                            val intent = Intent(Intent.ACTION_SEND).apply {
+                                type = "text/plain"
+                                putExtra(
+                                    Intent.EXTRA_SUBJECT,
+                                    context.getString(R.string.share_subject, typhoon.name)
+                                )
+                                putExtra(Intent.EXTRA_TEXT, text)
+                            }
+                            context.startActivity(
+                                Intent.createChooser(
+                                    intent,
+                                    context.getString(R.string.share_chooser_title)
+                                )
+                            )
+                        }
+                    )
+                }
+                // First frames / in-flight fetch / id mismatch — never show a blank surface.
+                // Note: delegated State cannot be smart-cast; use local snapshot.
+                !detailRequested ||
+                    detailLoading ||
+                    (selectedTyphoon.let { it != null && it.id != typhoonId }) -> {
+                    DetailLoadingPlaceholder(loading = true, onBack = ::leaveDetail)
+                }
+                else -> {
+                    DetailLoadingPlaceholder(loading = false, onBack = ::leaveDetail)
+                }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun DetailLoadingPlaceholder(
+    loading: Boolean,
+    onBack: () -> Unit
+) {
+    Scaffold(
+        containerColor = MaterialTheme.colorScheme.surfaceContainerLowest,
+        topBar = {
+            TopAppBar(
+                title = {
+                    Text(
+                        text = if (loading) {
+                            stringResource(R.string.loading_detail)
+                        } else {
+                            stringResource(R.string.error_title)
+                        }
+                    )
+                },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = stringResource(R.string.back)
+                        )
+                    }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceContainerLowest
+                )
+            )
+        }
+    ) { padding ->
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding),
+            contentAlignment = Alignment.Center
+        ) {
+            if (loading) {
+                CircularProgressIndicator()
+            } else {
+                Text(
+                    text = stringResource(R.string.error_unknown),
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
     }
 }

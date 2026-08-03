@@ -1,34 +1,50 @@
 package seamain.org.typhoonEye.ui.util
 
+import android.content.Context
+import androidx.annotation.StringRes
+import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
-import seamain.org.typhoonEye.data.model.Typhoon
-import seamain.org.typhoonEye.data.model.TyphoonPoint
+import androidx.compose.ui.res.stringResource
+import seamain.org.typhoonEye.R
+import seamain.org.typhoonEye.domain.model.Typhoon
+import seamain.org.typhoonEye.domain.model.TyphoonPoint
 import seamain.org.typhoonEye.ui.theme.IntensitySts
 import seamain.org.typhoonEye.ui.theme.IntensitySty
 import seamain.org.typhoonEye.ui.theme.IntensitySuper
 import seamain.org.typhoonEye.ui.theme.IntensityTd
 import seamain.org.typhoonEye.ui.theme.IntensityTs
 import seamain.org.typhoonEye.ui.theme.IntensityTy
+import java.util.Locale
 
-enum class IntensityLevel(val label: String, val shortLabel: String, val rank: Int) {
-    TD("热带低压", "TD", 1),
-    TS("热带风暴", "TS", 2),
-    STS("强热带风暴", "STS", 3),
-    TY("台风", "TY", 4),
-    STY("强台风", "STY", 5),
-    SUPER("超强台风", "SuperTY", 6),
-    UNKNOWN("未知", "?", 0)
+enum class IntensityLevel(@param:StringRes val labelRes: Int, val shortLabel: String, val rank: Int) {
+    TD(R.string.intensity_td, "TD", 1),
+    TS(R.string.intensity_ts, "TS", 2),
+    STS(R.string.intensity_sts, "STS", 3),
+    TY(R.string.intensity_ty, "TY", 4),
+    STY(R.string.intensity_sty, "STY", 5),
+    SUPER(R.string.intensity_super, "SuperTY", 6),
+    UNKNOWN(R.string.intensity_unknown, "?", 0)
 }
+
+fun IntensityLevel.label(context: Context): String = context.getString(labelRes)
+
+@Composable
+fun IntensityLevel.localizedLabel(): String = stringResource(labelRes)
 
 fun resolveIntensity(strong: String, power: String = ""): IntensityLevel {
     val text = "$strong $power".lowercase()
     return when {
-        text.contains("超强") || text.contains("superty") -> IntensityLevel.SUPER
-        text.contains("强台风") || text.contains("sty") -> IntensityLevel.STY
-        text.contains("强热带风暴") || text.contains("sts") -> IntensityLevel.STS
-        text.contains("台风") || text == "ty" || text.contains(" ty") -> IntensityLevel.TY
-        text.contains("热带风暴") || text.contains("ts") -> IntensityLevel.TS
-        text.contains("热带低压") || text.contains("td") -> IntensityLevel.TD
+        text.contains("超强") || text.contains("超強") || text.contains("superty") -> IntensityLevel.SUPER
+        text.contains("强台风") || text.contains("強烈颱風") || text.contains("强颱風") ||
+            text.contains("sty") -> IntensityLevel.STY
+        text.contains("强热带风暴") || text.contains("強烈熱帶風暴") || text.contains("sts") ->
+            IntensityLevel.STS
+        text.contains("台风") || text.contains("颱風") || text == "ty" || text.contains(" ty") ->
+            IntensityLevel.TY
+        text.contains("热带风暴") || text.contains("熱帶風暴") || text.contains("ts") ->
+            IntensityLevel.TS
+        text.contains("热带低压") || text.contains("熱帶低") || text.contains("td") ->
+            IntensityLevel.TD
         else -> {
             val p = power.toIntOrNull()
             when {
@@ -62,16 +78,127 @@ fun Typhoon.currentIntensity(): IntensityLevel {
 
 fun Typhoon.latestPoint(): TyphoonPoint? = points.lastOrNull()
 
-fun TyphoonPoint.displayIntensity(): String =
-    strong.ifBlank { if (power.isNotBlank()) "${power}级" else "—" }
+/** Prefer a readable storm name; Juhe uses intensity as name for unnamed lows. */
+fun Typhoon.displayName(context: Context): String {
+    val cn = name.trim()
+    val en = englishName.trim()
+    val looksLikeIntensity = cn.isBlank() ||
+        cn == strong.trim() ||
+        cn in INTENSITY_AS_NAME ||
+        en.equals("NAMELESS", ignoreCase = true)
+    return when {
+        !looksLikeIntensity -> cn
+        en.isNotBlank() && !en.equals("NAMELESS", ignoreCase = true) -> en
+        id.isNotBlank() -> context.getString(R.string.display_name_low_id, id)
+        cn.isNotBlank() -> cn
+        else -> context.getString(R.string.display_name_active_fallback)
+    }
+}
 
-fun TyphoonPoint.moveLabel(): String =
-    listOf(moveDirection, moveSpeed.takeIf { it.isNotBlank() }?.let {
-        if (it.contains("km") || it.contains("公里")) it else "${it} km/h"
-    }).filter { !it.isNullOrBlank() }.joinToString(" · ").ifBlank { "—" }
+fun TyphoonPoint.displayIntensity(context: Context): String =
+    strong.ifBlank {
+        if (power.isNotBlank()) context.getString(R.string.power_level_format, power) else "—"
+    }
+
+/** Resolve raw direction text to a stable key used for localization. */
+fun resolveDirectionKey(raw: String): String? {
+    val t = raw.trim()
+    if (t.isBlank()) return null
+    val key = t.uppercase(Locale.ROOT)
+    return DIRECTION_KEYS[key] ?: DIRECTION_KEYS[t]
+}
+
+fun localizeDirection(context: Context, raw: String): String {
+    val key = resolveDirectionKey(raw) ?: return raw.trim()
+    val res = DIRECTION_STRINGS[key] ?: return raw.trim()
+    return context.getString(res)
+}
+
+/** @deprecated Prefer [localizeDirection] / [moveLabel] with Context. */
+fun normalizeMoveDirection(raw: String): String {
+    val key = resolveDirectionKey(raw) ?: return raw.trim()
+    return FALLBACK_DIRECTION_ZH[key] ?: raw.trim()
+}
+
+fun TyphoonPoint.moveLabel(context: Context): String =
+    listOf(
+        localizeDirection(context, moveDirection).takeIf { it.isNotBlank() },
+        moveSpeed.takeIf { it.isNotBlank() }?.let { speed ->
+            when {
+                speed.contains("km", ignoreCase = true) ||
+                    speed.contains("公里") ||
+                    speed.contains("千米") -> speed
+                else -> "$speed km/h"
+            }
+        }
+    ).filterNotNull().joinToString(" · ").ifBlank { "—" }
+
+fun formatPressure(hPa: Int): String = "$hPa hPa"
+
+/** Drop trailing seconds: "2026-07-10 14:00:00" → "2026-07-10 14:00". */
+fun formatObservationTime(raw: String): String =
+    raw.trim().replace(Regex("""(\d{1,2}:\d{2}):\d{2}\s*$"""), "$1")
 
 fun formatCoordinate(lat: Double, lng: Double): String {
     val latDir = if (lat >= 0) "N" else "S"
     val lngDir = if (lng >= 0) "E" else "W"
     return String.format("%.1f°%s, %.1f°%s", kotlin.math.abs(lat), latDir, kotlin.math.abs(lng), lngDir)
 }
+
+private val INTENSITY_AS_NAME = setOf(
+    "热带低压", "热带风暴", "强热带风暴", "台风", "强台风", "超强台风",
+    "熱帶低氣壓", "熱帶性低氣壓", "熱帶風暴", "強烈熱帶風暴", "颱風", "強烈颱風", "超強颱風",
+    "Tropical Depression", "Tropical Storm", "Severe Tropical Storm",
+    "Typhoon", "Severe Typhoon", "Super Typhoon"
+)
+
+private val DIRECTION_KEYS = mapOf(
+    "N" to "N", "S" to "S", "E" to "E", "W" to "W",
+    "NE" to "NE", "NW" to "NW", "SE" to "SE", "SW" to "SW",
+    "NNE" to "NNE", "NNW" to "NNW", "ENE" to "ENE", "ESE" to "ESE",
+    "SSE" to "SSE", "SSW" to "SSW", "WSW" to "WSW", "WNW" to "WNW",
+    "北" to "N", "南" to "S", "东" to "E", "東" to "E", "西" to "W",
+    "东北" to "NE", "東北" to "NE", "西北" to "NW",
+    "东南" to "SE", "東南" to "SE", "西南" to "SW",
+    "北东北" to "NNE", "北東北" to "NNE", "北西北" to "NNW",
+    "东东北" to "ENE", "東東北" to "ENE", "东东南" to "ESE", "東東南" to "ESE",
+    "南东南" to "SSE", "南東南" to "SSE", "南西南" to "SSW",
+    "西西南" to "WSW", "西西北" to "WNW",
+    "北西" to "NW", "北东" to "NE", "北東" to "NE",
+    "南西" to "SW", "南东" to "SE", "南東" to "SE",
+    "西北西" to "NWW", "东北东" to "NEE", "東北東" to "NEE",
+    "西南西" to "SWW", "东南东" to "SEE", "東南東" to "SEE",
+    "西北偏西" to "NWW", "东北偏东" to "NEE", "東北偏東" to "NEE",
+    "西南偏西" to "SWW", "东南偏东" to "SEE", "東南偏東" to "SEE"
+)
+
+private val DIRECTION_STRINGS = mapOf(
+    "N" to R.string.direction_n,
+    "S" to R.string.direction_s,
+    "E" to R.string.direction_e,
+    "W" to R.string.direction_w,
+    "NE" to R.string.direction_ne,
+    "NW" to R.string.direction_nw,
+    "SE" to R.string.direction_se,
+    "SW" to R.string.direction_sw,
+    "NNE" to R.string.direction_nne,
+    "NNW" to R.string.direction_nnw,
+    "ENE" to R.string.direction_ene,
+    "ESE" to R.string.direction_ese,
+    "SSE" to R.string.direction_sse,
+    "SSW" to R.string.direction_ssw,
+    "WSW" to R.string.direction_wsw,
+    "WNW" to R.string.direction_wnw,
+    "NWW" to R.string.direction_nww,
+    "NEE" to R.string.direction_nee,
+    "SWW" to R.string.direction_sww,
+    "SEE" to R.string.direction_see
+)
+
+private val FALLBACK_DIRECTION_ZH = mapOf(
+    "N" to "北", "S" to "南", "E" to "东", "W" to "西",
+    "NE" to "东北", "NW" to "西北", "SE" to "东南", "SW" to "西南",
+    "NNE" to "北东北", "NNW" to "北西北", "ENE" to "东东北", "ESE" to "东东南",
+    "SSE" to "南东南", "SSW" to "南西南", "WSW" to "西西南", "WNW" to "西西北",
+    "NWW" to "西北偏西", "NEE" to "东北偏东", "SWW" to "西南偏西", "SEE" to "东南偏东"
+)

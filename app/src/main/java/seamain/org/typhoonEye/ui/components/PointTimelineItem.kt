@@ -20,11 +20,15 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import seamain.org.typhoonEye.data.model.TyphoonPoint
+import seamain.org.typhoonEye.R
+import seamain.org.typhoonEye.domain.model.TyphoonPoint
 import seamain.org.typhoonEye.ui.util.displayIntensity
 import seamain.org.typhoonEye.ui.util.formatCoordinate
+import seamain.org.typhoonEye.ui.util.formatObservationTime
 import seamain.org.typhoonEye.ui.util.intensityColor
 import seamain.org.typhoonEye.ui.util.moveLabel
 import seamain.org.typhoonEye.ui.util.resolveIntensity
@@ -36,6 +40,7 @@ fun PointTimelineItem(
     showConnector: Boolean = true,
     modifier: Modifier = Modifier
 ) {
+    val context = LocalContext.current
     val level = resolveIntensity(point.strong, point.power)
     val color = if (isForecast) {
         MaterialTheme.colorScheme.tertiary
@@ -76,7 +81,7 @@ fun PointTimelineItem(
         ) {
             Column(modifier = Modifier.padding(12.dp)) {
                 Text(
-                    text = point.time,
+                    text = formatObservationTime(point.time),
                     style = MaterialTheme.typography.labelLarge,
                     fontWeight = FontWeight.SemiBold,
                     color = color
@@ -89,12 +94,12 @@ fun PointTimelineItem(
                 Spacer(modifier = Modifier.height(6.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     Text(
-                        text = "风速 ${point.speed} m/s",
+                        text = stringResource(R.string.timeline_wind_speed, point.speed),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Text(
-                        text = "气压 ${point.pressure} hPa",
+                        text = stringResource(R.string.timeline_pressure, point.pressure),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -102,12 +107,12 @@ fun PointTimelineItem(
                 Spacer(modifier = Modifier.height(4.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     Text(
-                        text = "强度 ${point.displayIntensity()}",
+                        text = stringResource(R.string.timeline_intensity, point.displayIntensity(context)),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Text(
-                        text = "移动 ${point.moveLabel()}",
+                        text = stringResource(R.string.timeline_move, point.moveLabel(context)),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )

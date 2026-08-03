@@ -1,0 +1,10 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <!-- Monochrome silhouette for status bar (must be white fill) -->
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M12,4c-1.5,2.5 -2,5.5 -1.2,8.2C9.5,11 8,9.2 7,7c-1.8,2.2 -3,5 -3,8c0,4.4 3.6,8 8,8s8,-3.6 8,-8c0,-3 -1.2,-5.8 -3,-8c-1,2.2 -2.5,4 -3.8,5.2C14,9.5 13.5,6.5 12,4zM12,14c1.1,0 2,0.9 2,2s-0.9,2 -2,2s-2,-0.9 -2,-2S10.9,14 12,14z" />
+</vector>

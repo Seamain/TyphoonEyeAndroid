@@ -1,0 +1,581 @@
+package seamain.org.typhoonEye.ui.components
+
+import android.graphics.Color as AndroidColor
+import android.os.Build
+import android.util.Log
+import android.view.MotionEvent
+import android.view.View
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.platform.LocalInspectionMode
+import androidx.compose.ui.viewinterop.AndroidView
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import org.maplibre.android.MapLibre
+import org.maplibre.android.camera.CameraUpdateFactory
+import org.maplibre.android.geometry.LatLng
+import org.maplibre.android.geometry.LatLngBounds
+import org.maplibre.android.maps.MapLibreMap
+import org.maplibre.android.maps.MapView
+import org.maplibre.android.maps.Style
+import org.maplibre.android.style.expressions.Expression
+import org.maplibre.android.style.layers.CircleLayer
+import org.maplibre.android.style.layers.FillLayer
+import org.maplibre.android.style.layers.LineLayer
+import org.maplibre.android.style.layers.Property
+import org.maplibre.android.style.layers.PropertyFactory
+import org.maplibre.android.style.sources.GeoJsonSource
+import org.maplibre.geojson.Feature
+import org.maplibre.geojson.FeatureCollection
+import org.maplibre.geojson.LineString
+import org.maplibre.geojson.Point
+import org.maplibre.geojson.Polygon
+import seamain.org.typhoonEye.BuildConfig
+import seamain.org.typhoonEye.R
+import seamain.org.typhoonEye.domain.model.TyphoonPoint
+import seamain.org.typhoonEye.ui.util.WindRadiiKm
+import seamain.org.typhoonEye.ui.util.intensityColor
+import seamain.org.typhoonEye.ui.util.resolveIntensity
+import seamain.org.typhoonEye.ui.util.windCircleRing
+import seamain.org.typhoonEye.ui.util.windRadii10
+import seamain.org.typhoonEye.ui.util.windRadii12
+import seamain.org.typhoonEye.ui.util.windRadii7
+import seamain.org.typhoonEye.ui.util.windRadiusPaddingDegrees
+
+private const val TAG = "TyphoonTrackMap"
+private const val SOURCE_HISTORY = "ty-history-line"
+private const val SOURCE_FORECAST = "ty-forecast-line"
+private const val SOURCE_POINTS = "ty-points"
+private const val SOURCE_WIND7 = "ty-wind-7"
+private const val SOURCE_WIND10 = "ty-wind-10"
+private const val SOURCE_WIND12 = "ty-wind-12"
+private const val LAYER_HISTORY = "ty-history-layer"
+private const val LAYER_FORECAST = "ty-forecast-layer"
+private const val LAYER_POINTS = "ty-points-layer"
+private const val LAYER_CURRENT = "ty-current-layer"
+private const val LAYER_WIND7_FILL = "ty-wind-7-fill"
+private const val LAYER_WIND7_LINE = "ty-wind-7-line"
+private const val LAYER_WIND10_FILL = "ty-wind-10-fill"
+private const val LAYER_WIND10_LINE = "ty-wind-10-line"
+private const val LAYER_WIND12_FILL = "ty-wind-12-fill"
+private const val LAYER_WIND12_LINE = "ty-wind-12-line"
+private const val ASSET_STYLE = "asset://map_style.json"
+private const val ASSET_STYLE_DARK = "asset://map_style_dark.json"
+private const val DEMO_STYLE = "https://demotiles.maplibre.org/style.json"
+
+/** 七级风圈 — amber */
+private const val WIND7_FILL = "#F9A825"
+private const val WIND7_LINE = "#F57F17"
+/** 十级风圈 — deep orange */
+private const val WIND10_FILL = "#FF8A65"
+private const val WIND10_LINE = "#E64A19"
+/** 十二级风圈 — red */
+private const val WIND12_FILL = "#EF5350"
+private const val WIND12_LINE = "#C62828"
+
+private fun isRobolectricRuntime(): Boolean =
+    Build.FINGERPRINT.lowercase().contains("robolectric")
+
+/**
+ * Interactive MapLibre map. Falls back to [TrackCanvas] on preview / failure.
+ *
+ * Lifecycle note: MapView must not receive onStart/onResume before it is attached
+ * to a window — that was crashing when opening the track tab.
+ */
+@Composable
+fun TyphoonTrackMap(
+    history: List<TyphoonPoint>,
+    forecast: List<TyphoonPoint>,
+    historyColor: Color,
+    forecastColor: Color,
+    modifier: Modifier = Modifier
+) {
+    val inspection = LocalInspectionMode.current
+    var useFallback by remember { mutableStateOf(false) }
+    var loadError by remember { mutableStateOf<String?>(null) }
+
+    if (inspection || isRobolectricRuntime() || useFallback ||
+        (history.isEmpty() && forecast.isEmpty())
+    ) {
+        if (history.isEmpty() && forecast.isEmpty()) {
+            Box(modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                Text(stringResource(R.string.track_no_data), color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        } else {
+            TrackCanvas(
+                history = history,
+                forecast = forecast,
+                historyColor = historyColor,
+                forecastColor = forecastColor,
+                modifier = modifier
+            )
+        }
+        return
+    }
+
+    val lifecycleOwner = LocalLifecycleOwner.current
+    val darkTheme = isSystemInDarkTheme()
+    var mapReady by remember(darkTheme) { mutableStateOf(false) }
+    val mapViewRef = remember { mutableStateOf<MapView?>(null) }
+    val mapRef = remember { mutableStateOf<MapLibreMap?>(null) }
+    val styleRef = remember { mutableStateOf<Style?>(null) }
+
+    val historyHex = historyColor.toHexRgb()
+    val forecastHex = forecastColor.toHexRgb()
+    val defaultStyleUri = if (darkTheme) ASSET_STYLE_DARK else ASSET_STYLE
+
+    // Refresh track + wind layers when detail data arrives / updates.
+    LaunchedEffect(history, forecast, historyHex, forecastHex, mapReady) {
+        val style = styleRef.value ?: return@LaunchedEffect
+        val map = mapRef.value ?: return@LaunchedEffect
+        if (!mapReady) return@LaunchedEffect
+        runCatching {
+            applyTrackLayers(
+                style = style,
+                history = history,
+                forecast = forecast,
+                historyColorHex = historyHex,
+                forecastColorHex = forecastHex
+            )
+            fitCamera(map, history, forecast)
+        }.onFailure { e ->
+            Log.e(TAG, "Failed to refresh track layers", e)
+        }
+    }
+
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            val mapView = mapViewRef.value ?: return@LifecycleEventObserver
+            if (!mapView.isAttachedToWindow) return@LifecycleEventObserver
+            try {
+                when (event) {
+                    Lifecycle.Event.ON_START -> mapView.onStart()
+                    Lifecycle.Event.ON_RESUME -> mapView.onResume()
+                    Lifecycle.Event.ON_PAUSE -> mapView.onPause()
+                    Lifecycle.Event.ON_STOP -> mapView.onStop()
+                    else -> Unit
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "MapView lifecycle error: $event", e)
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+            mapViewRef.value?.let { mv ->
+                try {
+                    if (mv.isAttachedToWindow) {
+                        mv.onPause()
+                        mv.onStop()
+                    }
+                    mv.onDestroy()
+                } catch (e: Exception) {
+                    Log.e(TAG, "MapView destroy error", e)
+                }
+            }
+            mapViewRef.value = null
+            mapRef.value = null
+            styleRef.value = null
+        }
+    }
+
+    Box(
+        modifier = modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.surfaceContainerHighest)
+    ) {
+        key(darkTheme) {
+            AndroidView(
+                factory = { ctx ->
+                    try {
+                        MapLibre.getInstance(ctx.applicationContext)
+                    } catch (e: Exception) {
+                        Log.e(TAG, "MapLibre init failed", e)
+                    }
+
+                    MapView(ctx).apply {
+                        mapViewRef.value = this
+                        onCreate(null)
+
+                        setOnTouchListener { v, event ->
+                            when (event.actionMasked) {
+                                MotionEvent.ACTION_DOWN, MotionEvent.ACTION_MOVE ->
+                                    v.parent?.requestDisallowInterceptTouchEvent(true)
+                                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL ->
+                                    v.parent?.requestDisallowInterceptTouchEvent(false)
+                            }
+                            false
+                        }
+
+                        addOnAttachStateChangeListener(object : View.OnAttachStateChangeListener {
+                            override fun onViewAttachedToWindow(v: View) {
+                                try {
+                                    onStart()
+                                    onResume()
+                                } catch (e: Exception) {
+                                    Log.e(TAG, "attach lifecycle failed", e)
+                                    useFallback = true
+                                }
+                            }
+
+                            override fun onViewDetachedFromWindow(v: View) {
+                                try {
+                                    onPause()
+                                    onStop()
+                                } catch (e: Exception) {
+                                    Log.e(TAG, "detach lifecycle failed", e)
+                                }
+                            }
+                        })
+
+                        getMapAsync { map ->
+                            try {
+                                mapRef.value = map
+                                map.uiSettings.isAttributionEnabled = true
+                                map.uiSettings.isCompassEnabled = true
+                                map.uiSettings.setAllGesturesEnabled(true)
+
+                                val custom = BuildConfig.MAPLIBRE_STYLE_URL.trim()
+                                val styleUri = when {
+                                    custom.isBlank() -> defaultStyleUri
+                                    custom.contains("openfreemap.org") -> defaultStyleUri
+                                    else -> custom
+                                }
+
+                                fun bindStyle(style: Style) {
+                                    try {
+                                        styleRef.value = style
+                                        applyTrackLayers(
+                                            style = style,
+                                            history = history,
+                                            forecast = forecast,
+                                            historyColorHex = historyHex,
+                                            forecastColorHex = forecastHex
+                                        )
+                                        fitCamera(map, history, forecast)
+                                        post { mapReady = true }
+                                    } catch (e: Exception) {
+                                        Log.e(TAG, "Failed to draw track layers", e)
+                                        post {
+                                            loadError = ctx.getString(R.string.map_track_draw_failed)
+                                            useFallback = true
+                                        }
+                                    }
+                                }
+
+                                map.setStyle(Style.Builder().fromUri(styleUri)) { style ->
+                                    bindStyle(style)
+                                }
+
+                                postDelayed({
+                                    if (!mapReady && !useFallback) {
+                                        map.setStyle(Style.Builder().fromUri(DEMO_STYLE)) { style ->
+                                            bindStyle(style)
+                                        }
+                                    }
+                                }, 4500)
+                            } catch (e: Exception) {
+                                Log.e(TAG, "getMapAsync failed", e)
+                                post {
+                                    loadError = e.message ?: ctx.getString(R.string.map_load_failed)
+                                    useFallback = true
+                                }
+                            }
+                        }
+                    }
+                },
+                modifier = Modifier.fillMaxSize(),
+                update = { /* layers refreshed via LaunchedEffect */ }
+            )
+        }
+
+        if (!mapReady && !useFallback) {
+            CircularProgressIndicator(
+                modifier = Modifier.align(Alignment.Center),
+                color = MaterialTheme.colorScheme.primary
+            )
+        }
+        loadError?.takeIf { !useFallback }?.let { err ->
+            Text(
+                text = err,
+                modifier = Modifier.align(Alignment.Center),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                style = MaterialTheme.typography.bodySmall
+            )
+        }
+    }
+}
+
+private fun applyTrackLayers(
+    style: Style,
+    history: List<TyphoonPoint>,
+    forecast: List<TyphoonPoint>,
+    historyColorHex: String,
+    forecastColorHex: String
+) {
+    val layersToRemove = listOf(
+        LAYER_CURRENT, LAYER_POINTS,
+        LAYER_FORECAST, LAYER_HISTORY,
+        LAYER_WIND12_LINE, LAYER_WIND12_FILL,
+        LAYER_WIND10_LINE, LAYER_WIND10_FILL,
+        LAYER_WIND7_LINE, LAYER_WIND7_FILL
+    )
+    layersToRemove.forEach { id -> runCatching { style.removeLayer(id) } }
+    listOf(
+        SOURCE_HISTORY, SOURCE_FORECAST, SOURCE_POINTS,
+        SOURCE_WIND7, SOURCE_WIND10, SOURCE_WIND12
+    ).forEach { id -> runCatching { style.removeSource(id) } }
+
+    // Wind circles under tracks — around the latest observed point.
+    val current = history.lastOrNull()
+    if (current != null) {
+        addWindCircleLayer(
+            style = style,
+            sourceId = SOURCE_WIND7,
+            fillLayerId = LAYER_WIND7_FILL,
+            lineLayerId = LAYER_WIND7_LINE,
+            center = current,
+            radii = current.windRadii7(),
+            fillColor = WIND7_FILL,
+            lineColor = WIND7_LINE,
+            fillOpacity = 0.18f,
+            lineOpacity = 0.75f
+        )
+        addWindCircleLayer(
+            style = style,
+            sourceId = SOURCE_WIND10,
+            fillLayerId = LAYER_WIND10_FILL,
+            lineLayerId = LAYER_WIND10_LINE,
+            center = current,
+            radii = current.windRadii10(),
+            fillColor = WIND10_FILL,
+            lineColor = WIND10_LINE,
+            fillOpacity = 0.22f,
+            lineOpacity = 0.8f
+        )
+        addWindCircleLayer(
+            style = style,
+            sourceId = SOURCE_WIND12,
+            fillLayerId = LAYER_WIND12_FILL,
+            lineLayerId = LAYER_WIND12_LINE,
+            center = current,
+            radii = current.windRadii12(),
+            fillColor = WIND12_FILL,
+            lineColor = WIND12_LINE,
+            fillOpacity = 0.28f,
+            lineOpacity = 0.85f
+        )
+    }
+
+    if (history.size >= 2) {
+        style.addSource(GeoJsonSource(SOURCE_HISTORY, lineString(history)))
+        style.addLayer(
+            LineLayer(LAYER_HISTORY, SOURCE_HISTORY).withProperties(
+                PropertyFactory.lineColor(historyColorHex),
+                PropertyFactory.lineWidth(3.5f),
+                PropertyFactory.lineCap(Property.LINE_CAP_ROUND),
+                PropertyFactory.lineJoin(Property.LINE_JOIN_ROUND),
+                PropertyFactory.lineOpacity(0.92f)
+            )
+        )
+    }
+
+    val forecastLine = buildList {
+        if (history.isNotEmpty() && forecast.isNotEmpty()) add(history.last())
+        addAll(forecast)
+    }
+    if (forecastLine.size >= 2) {
+        style.addSource(GeoJsonSource(SOURCE_FORECAST, lineString(forecastLine)))
+        style.addLayer(
+            LineLayer(LAYER_FORECAST, SOURCE_FORECAST).withProperties(
+                PropertyFactory.lineColor(forecastColorHex),
+                PropertyFactory.lineWidth(3f),
+                PropertyFactory.lineCap(Property.LINE_CAP_ROUND),
+                PropertyFactory.lineJoin(Property.LINE_JOIN_ROUND),
+                PropertyFactory.lineDasharray(arrayOf(2f, 2f)),
+                PropertyFactory.lineOpacity(0.9f)
+            )
+        )
+    }
+
+    val pointFeatures = ArrayList<Feature>()
+    history.forEachIndexed { index, point ->
+        val level = resolveIntensity(point.strong, point.power)
+        val color = intensityColor(level)
+        val isCurrent = index == history.lastIndex
+        val feature = Feature.fromGeometry(Point.fromLngLat(point.lng, point.lat))
+        feature.addBooleanProperty("current", isCurrent)
+        feature.addStringProperty("color", color.toHexRgb())
+        pointFeatures += feature
+    }
+    forecast.forEach { point ->
+        val level = resolveIntensity(point.strong, point.power)
+        val color = if (level.rank > 0) intensityColor(level) else null
+        val feature = Feature.fromGeometry(Point.fromLngLat(point.lng, point.lat))
+        feature.addBooleanProperty("current", false)
+        feature.addStringProperty("color", color?.toHexRgb() ?: forecastColorHex)
+        pointFeatures += feature
+    }
+
+    if (pointFeatures.isNotEmpty()) {
+        style.addSource(
+            GeoJsonSource(SOURCE_POINTS, FeatureCollection.fromFeatures(pointFeatures))
+        )
+        style.addLayer(
+            CircleLayer(LAYER_POINTS, SOURCE_POINTS)
+                .withFilter(
+                    Expression.neq(
+                        Expression.get("current"),
+                        Expression.literal(true)
+                    )
+                )
+                .withProperties(
+                    PropertyFactory.circleColor(Expression.toColor(Expression.get("color"))),
+                    PropertyFactory.circleRadius(5f),
+                    PropertyFactory.circleStrokeColor(AndroidColor.WHITE),
+                    PropertyFactory.circleStrokeWidth(1.5f),
+                    PropertyFactory.circleOpacity(0.95f)
+                )
+        )
+        style.addLayer(
+            CircleLayer(LAYER_CURRENT, SOURCE_POINTS)
+                .withFilter(
+                    Expression.eq(
+                        Expression.get("current"),
+                        Expression.literal(true)
+                    )
+                )
+                .withProperties(
+                    PropertyFactory.circleColor(Expression.toColor(Expression.get("color"))),
+                    PropertyFactory.circleRadius(9f),
+                    PropertyFactory.circleStrokeColor(AndroidColor.WHITE),
+                    PropertyFactory.circleStrokeWidth(2.5f),
+                    PropertyFactory.circleOpacity(0.95f)
+                )
+        )
+    }
+}
+
+private fun addWindCircleLayer(
+    style: Style,
+    sourceId: String,
+    fillLayerId: String,
+    lineLayerId: String,
+    center: TyphoonPoint,
+    radii: WindRadiiKm?,
+    fillColor: String,
+    lineColor: String,
+    fillOpacity: Float,
+    lineOpacity: Float
+) {
+    if (radii == null || !radii.hasAny) return
+    val ring = windCircleRing(center.lat, center.lng, radii)
+    if (ring.size < 4) return
+
+    val coords = ArrayList<Point>(ring.size)
+    ring.forEach { (lat, lng) -> coords.add(Point.fromLngLat(lng, lat)) }
+    val polygon = Polygon.fromLngLats(listOf(coords))
+    style.addSource(GeoJsonSource(sourceId, polygon))
+    style.addLayer(
+        FillLayer(fillLayerId, sourceId).withProperties(
+            PropertyFactory.fillColor(fillColor),
+            PropertyFactory.fillOpacity(fillOpacity),
+            PropertyFactory.fillAntialias(true)
+        )
+    )
+    style.addLayer(
+        LineLayer(lineLayerId, sourceId).withProperties(
+            PropertyFactory.lineColor(lineColor),
+            PropertyFactory.lineWidth(1.6f),
+            PropertyFactory.lineOpacity(lineOpacity),
+            PropertyFactory.lineCap(Property.LINE_CAP_ROUND),
+            PropertyFactory.lineJoin(Property.LINE_JOIN_ROUND)
+        )
+    )
+}
+
+private fun fitCamera(
+    map: MapLibreMap,
+    history: List<TyphoonPoint>,
+    forecast: List<TyphoonPoint>
+) {
+    val points = history + forecast
+    if (points.isEmpty()) return
+    val valid = points.filter { it.lat in -90.0..90.0 && it.lng in -180.0..180.0 }
+    if (valid.isEmpty()) return
+
+    var minLat = valid.minOf { it.lat }
+    var maxLat = valid.maxOf { it.lat }
+    var minLng = valid.minOf { it.lng }
+    var maxLng = valid.maxOf { it.lng }
+
+    history.lastOrNull()?.let { current ->
+        val maxR = listOfNotNull(
+            current.windRadii7()?.maxKm,
+            current.windRadii10()?.maxKm,
+            current.windRadii12()?.maxKm
+        ).maxOrNull() ?: 0.0
+        if (maxR > 0.0) {
+            val (latPad, lngPad) = windRadiusPaddingDegrees(current.lat, maxR)
+            minLat = minOf(minLat, current.lat - latPad)
+            maxLat = maxOf(maxLat, current.lat + latPad)
+            minLng = minOf(minLng, current.lng - lngPad)
+            maxLng = maxOf(maxLng, current.lng + lngPad)
+        }
+    }
+
+    if (valid.size == 1 && maxLat - minLat < 0.4 && maxLng - minLng < 0.4) {
+        map.moveCamera(
+            CameraUpdateFactory.newLatLngZoom(
+                LatLng(valid.first().lat, valid.first().lng),
+                5.5
+            )
+        )
+        return
+    }
+
+    val latSpan = (maxLat - minLat).coerceAtLeast(0.3)
+    val lngSpan = (maxLng - minLng).coerceAtLeast(0.3)
+    val midLat = (minLat + maxLat) / 2.0
+    val midLng = (minLng + maxLng) / 2.0
+
+    runCatching {
+        val builder = LatLngBounds.Builder()
+        builder.include(LatLng(midLat - latSpan / 2, midLng - lngSpan / 2))
+        builder.include(LatLng(midLat + latSpan / 2, midLng + lngSpan / 2))
+        valid.forEach { builder.include(LatLng(it.lat, it.lng)) }
+        map.moveCamera(CameraUpdateFactory.newLatLngBounds(builder.build(), 72))
+    }.onFailure {
+        map.moveCamera(CameraUpdateFactory.newLatLngZoom(LatLng(midLat, midLng), 4.5))
+    }
+}
+
+private fun lineString(points: List<TyphoonPoint>): LineString {
+    val coords = ArrayList<Point>(points.size)
+    points.forEach { coords.add(Point.fromLngLat(it.lng, it.lat)) }
+    return LineString.fromLngLats(coords)
+}
+
+private fun Color.toHexRgb(): String {
+    val argb = toArgb()
+    return String.format("#%06X", 0xFFFFFF and argb)
+}
