@@ -62,6 +62,13 @@ jobs:
           if [ -n "${{ secrets.QWEATHER_PRIVATE_KEY }}" ]; then
             echo "QWEATHER_PRIVATE_KEY=\"${{ secrets.QWEATHER_PRIVATE_KEY }}\"" >> local.properties
           fi
+          if [ -n "${{ secrets.RELEASE_KEYSTORE_BASE64 }}" ]; then
+            echo "${{ secrets.RELEASE_KEYSTORE_BASE64 }}" | base64 -d > release.keystore
+            echo "RELEASE_STORE_FILE=release.keystore" >> local.properties
+            echo "RELEASE_STORE_PASSWORD=${{ secrets.RELEASE_STORE_PASSWORD }}" >> local.properties
+            echo "RELEASE_KEY_ALIAS=${{ secrets.RELEASE_KEY_ALIAS }}" >> local.properties
+            echo "RELEASE_KEY_PASSWORD=${{ secrets.RELEASE_KEY_PASSWORD }}" >> local.properties
+          fi
 
       - name: Extract Tag or Version Info
         id: get_version
