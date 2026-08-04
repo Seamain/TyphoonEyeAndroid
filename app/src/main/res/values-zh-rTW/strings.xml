@@ -129,6 +129,12 @@
     <string name="grant_location_permission">授予定位權限</string>
     <string name="alert_distance_km">距你約 %1$d 公里</string>
     <string name="alert_relative_to_you">相對位置：%1$s</string>
+    <string name="distance_from_you">距你約 %1$d 公里</string>
+    <string name="distance_unknown">距離未知</string>
+    <string name="label_distance">距你</string>
+    <string name="legend_you">我的位置</string>
+    <string name="legend_link_to_you">連線至中心</string>
+    <string name="track_map_hint_with_you">歷史實線 · 預報虛線 · 藍點為你的位置 · 可縮放拖動</string>
     <string name="grant_notification_permission">授予通知權限</string>
     <string name="dynamic_color_title">動態取色</string>
     <string name="dynamic_color_subtitle">跟隨系統桌布自動配色（Android 12+）</string>
@@ -184,4 +190,15 @@
     <string name="alert_settings_need_permission">已開啟，但需授予通知權限後才會推送</string>
     <string name="alert_send_demo">傳送測試預警</string>
     <string name="cd_language_option">語言：%1$s</string>
+    <string name="open_source_licenses">開源許可與致謝</string>
+    <string name="open_source_licenses_subtitle">感謝優秀的開源專案與社群貢獻者</string>
+    <string name="open_source_licenses_desc">颱風眼基於以下優秀開源專案建置，感謝所有維護者的無私貢獻：</string>
+    <string name="oss_compose_desc">Android 官方現代宣告式 UI 工具包與 Material Design 3 元件庫</string>
+    <string name="oss_coroutines_desc">Kotlin 異步並發協程支援與高效 JSON 跨平台序列化框架</string>
+    <string name="oss_hilt_desc">Android 官方推薦的標準化依賴注入 (DI) 解答方案</string>
+    <string name="oss_maplibre_desc">開源跨平台向量地圖渲染引擎，用於颱風軌跡與風圈多邊形呈現</string>
+    <string name="oss_retrofit_desc">類型安全的 RESTful API 客戶端與底層 HTTP/2 傳輸網路引擎</string>
+    <string name="oss_jetpack_desc">本地 SQLite 資料庫持久化、響應式配置儲存與背景 Live 狀態定時調度</string>
+    <string name="oss_eddsa_desc">用於和風天氣 API 的 Ed25519 / EdDSA 密碼學數位簽章演算法實現</string>
+    <string name="oss_test_desc">Kotlin Flow 響應式資料流測試庫與 Mockito 單元測試模擬框架</string>
 </resources>

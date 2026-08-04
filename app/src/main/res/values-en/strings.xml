@@ -20,6 +20,9 @@
     <string name="location">Location</string>
     <string name="intensity">Intensity</string>
     <string name="updated_at">Updated %1$s</string>
+    <string name="updated_just_now">Just updated</string>
+    <string name="updated_minutes_ago">Updated %1$d mins ago</string>
+    <string name="updated_today_at">Updated today at %1$s</string>
     <string name="forecast_bulletin">Forecast notes</string>
     <string name="points_count">%1$d observations</string>
     <string name="forecast_points_count">%1$d forecast points</string>
@@ -71,10 +74,18 @@
     <string name="legend_forecast">Forecast</string>
     <string name="tab_history">History</string>
     <string name="tab_forecast">Forecast</string>
-    <string name="wind_radius_7">34-kt wind</string>
-    <string name="wind_radius_10">50-kt wind</string>
-    <string name="wind_radius_12">64-kt wind</string>
-    <string name="wind_radius_title">Wind radii</string>
+    <string name="wind_radius_7">34-kt wind (≥13.9m/s)</string>
+    <string name="wind_radius_10">50-kt wind (≥24.5m/s)</string>
+    <string name="wind_radius_12">64-kt wind (≥32.7m/s)</string>
+    <string name="wind_radius_title">Wind Radii Ranges</string>
+    <string name="wind_radius_symmetric">Symmetric %1$d km</string>
+    <string name="wind_radius_asymmetric_summary">Max %1$d km · Avg %2$d km</string>
+    <string name="wind_quadrant_detail">%1$s %2$d km</string>
+    <string name="time_today_format">Today %1$s</string>
+    <string name="time_yesterday_format">Yesterday %1$s</string>
+    <string name="time_minutes_ago">%1$d mins ago</string>
+    <string name="time_hours_ago">%1$d hrs ago</string>
+    <string name="time_observed_with_relative">%1$s (%2$s)</string>
     <string name="track_no_data">No track data</string>
     <string name="summary_total_active">%1$d total · %2$d active</string>
     <string name="cd_search_typhoon">Search typhoons</string>
@@ -129,6 +140,12 @@
     <string name="grant_location_permission">Grant location permission</string>
     <string name="alert_distance_km">About %1$d km from you</string>
     <string name="alert_relative_to_you">Near: %1$s</string>
+    <string name="distance_from_you">About %1$d km from you</string>
+    <string name="distance_unknown">Distance unknown</string>
+    <string name="label_distance">Distance</string>
+    <string name="legend_you">You</string>
+    <string name="legend_link_to_you">Line to center</string>
+    <string name="track_map_hint_with_you">Solid history · dashed forecast · blue = you · pinch to zoom</string>
     <string name="grant_notification_permission">Grant notification permission</string>
     <string name="dynamic_color_title">Dynamic color</string>
     <string name="dynamic_color_subtitle">Match colors to the system wallpaper (Android 12+)</string>
@@ -184,4 +201,15 @@
     <string name="alert_settings_need_permission">On, but notification permission is required</string>
     <string name="alert_send_demo">Send test alert</string>
     <string name="cd_language_option">Language: %1$s</string>
+    <string name="open_source_licenses">Open Source Licenses</string>
+    <string name="open_source_licenses_subtitle">Thanks to open-source projects &amp; contributors</string>
+    <string name="open_source_licenses_desc">Typhoon Eye is built with the following open-source projects. Special thanks to all maintainers:</string>
+    <string name="oss_compose_desc">Official modern declarative UI toolkit and Material Design 3 component library for Android</string>
+    <string name="oss_coroutines_desc">Asynchronous concurrency coroutines and high-performance cross-platform JSON serialization</string>
+    <string name="oss_hilt_desc">Official recommended standardized dependency injection (DI) solution for Android</string>
+    <string name="oss_maplibre_desc">Open-source cross-platform vector map rendering engine for typhoon tracks and wind radii</string>
+    <string name="oss_retrofit_desc">Type-safe RESTful API client and low-level HTTP/2 network transport engine</string>
+    <string name="oss_jetpack_desc">Local SQLite database persistence, reactive DataStore preferences, and background Live scheduling</string>
+    <string name="oss_eddsa_desc">Ed25519 / EdDSA cryptographic signature algorithm implementation for QWeather API</string>
+    <string name="oss_test_desc">Testing utility for Kotlin Flows and Mockito unit testing framework</string>
 </resources>

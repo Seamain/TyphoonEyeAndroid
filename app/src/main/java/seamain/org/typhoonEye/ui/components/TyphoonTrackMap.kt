@@ -52,6 +52,7 @@ import org.maplibre.geojson.Polygon
 import seamain.org.typhoonEye.BuildConfig
 import seamain.org.typhoonEye.R
 import seamain.org.typhoonEye.domain.model.TyphoonPoint
+import seamain.org.typhoonEye.domain.model.UserLocation
 import seamain.org.typhoonEye.ui.util.WindRadiiKm
 import seamain.org.typhoonEye.ui.util.intensityColor
 import seamain.org.typhoonEye.ui.util.resolveIntensity
@@ -68,6 +69,8 @@ private const val SOURCE_POINTS = "ty-points"
 private const val SOURCE_WIND7 = "ty-wind-7"
 private const val SOURCE_WIND10 = "ty-wind-10"
 private const val SOURCE_WIND12 = "ty-wind-12"
+private const val SOURCE_USER = "ty-user"
+private const val SOURCE_USER_LINK = "ty-user-link"
 private const val LAYER_HISTORY = "ty-history-layer"
 private const val LAYER_FORECAST = "ty-forecast-layer"
 private const val LAYER_POINTS = "ty-points-layer"
@@ -78,6 +81,9 @@ private const val LAYER_WIND10_FILL = "ty-wind-10-fill"
 private const val LAYER_WIND10_LINE = "ty-wind-10-line"
 private const val LAYER_WIND12_FILL = "ty-wind-12-fill"
 private const val LAYER_WIND12_LINE = "ty-wind-12-line"
+private const val LAYER_USER_LINK = "ty-user-link-layer"
+private const val LAYER_USER = "ty-user-layer"
+private const val USER_COLOR = "#1E88E5"
 private const val ASSET_STYLE = "asset://map_style.json"
 private const val ASSET_STYLE_DARK = "asset://map_style_dark.json"
 private const val DEMO_STYLE = "https://demotiles.maplibre.org/style.json"
@@ -107,7 +113,8 @@ fun TyphoonTrackMap(
     forecast: List<TyphoonPoint>,
     historyColor: Color,
     forecastColor: Color,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    userLocation: UserLocation? = null
 ) {
     val inspection = LocalInspectionMode.current
     var useFallback by remember { mutableStateOf(false) }
@@ -143,8 +150,10 @@ fun TyphoonTrackMap(
     val forecastHex = forecastColor.toHexRgb()
     val defaultStyleUri = if (darkTheme) ASSET_STYLE_DARK else ASSET_STYLE
 
+    val userKey = userLocation?.let { "${it.latitude},${it.longitude}" }.orEmpty()
+
     // Refresh track + wind layers when detail data arrives / updates.
-    LaunchedEffect(history, forecast, historyHex, forecastHex, mapReady) {
+    LaunchedEffect(history, forecast, historyHex, forecastHex, mapReady, userKey) {
         val style = styleRef.value ?: return@LaunchedEffect
         val map = mapRef.value ?: return@LaunchedEffect
         if (!mapReady) return@LaunchedEffect
@@ -154,9 +163,10 @@ fun TyphoonTrackMap(
                 history = history,
                 forecast = forecast,
                 historyColorHex = historyHex,
-                forecastColorHex = forecastHex
+                forecastColorHex = forecastHex,
+                userLocation = userLocation
             )
-            fitCamera(map, history, forecast)
+            fitCamera(map, history, forecast, userLocation)
         }.onFailure { e ->
             Log.e(TAG, "Failed to refresh track layers", e)
         }
@@ -269,9 +279,10 @@ fun TyphoonTrackMap(
                                             history = history,
                                             forecast = forecast,
                                             historyColorHex = historyHex,
-                                            forecastColorHex = forecastHex
+                                            forecastColorHex = forecastHex,
+                                            userLocation = userLocation
                                         )
-                                        fitCamera(map, history, forecast)
+                                        fitCamera(map, history, forecast, userLocation)
                                         post { mapReady = true }
                                     } catch (e: Exception) {
                                         Log.e(TAG, "Failed to draw track layers", e)
@@ -330,9 +341,11 @@ private fun applyTrackLayers(
     history: List<TyphoonPoint>,
     forecast: List<TyphoonPoint>,
     historyColorHex: String,
-    forecastColorHex: String
+    forecastColorHex: String,
+    userLocation: UserLocation? = null
 ) {
     val layersToRemove = listOf(
+        LAYER_USER, LAYER_USER_LINK,
         LAYER_CURRENT, LAYER_POINTS,
         LAYER_FORECAST, LAYER_HISTORY,
         LAYER_WIND12_LINE, LAYER_WIND12_FILL,
@@ -341,6 +354,7 @@ private fun applyTrackLayers(
     )
     layersToRemove.forEach { id -> runCatching { style.removeLayer(id) } }
     listOf(
+        SOURCE_USER, SOURCE_USER_LINK,
         SOURCE_HISTORY, SOURCE_FORECAST, SOURCE_POINTS,
         SOURCE_WIND7, SOURCE_WIND10, SOURCE_WIND12
     ).forEach { id -> runCatching { style.removeSource(id) } }
@@ -473,6 +487,41 @@ private fun applyTrackLayers(
                 )
         )
     }
+
+    // User location + dashed link to current storm center.
+    val user = userLocation?.takeIf { it.isValid }
+    val stormNow = history.lastOrNull()
+    if (user != null) {
+        if (stormNow != null) {
+            val link = LineString.fromLngLats(
+                listOf(
+                    Point.fromLngLat(user.longitude, user.latitude),
+                    Point.fromLngLat(stormNow.lng, stormNow.lat)
+                )
+            )
+            style.addSource(GeoJsonSource(SOURCE_USER_LINK, link))
+            style.addLayer(
+                LineLayer(LAYER_USER_LINK, SOURCE_USER_LINK).withProperties(
+                    PropertyFactory.lineColor(USER_COLOR),
+                    PropertyFactory.lineWidth(2.2f),
+                    PropertyFactory.lineDasharray(arrayOf(1.5f, 1.5f)),
+                    PropertyFactory.lineOpacity(0.85f),
+                    PropertyFactory.lineCap(Property.LINE_CAP_ROUND)
+                )
+            )
+        }
+        val userFeature = Feature.fromGeometry(Point.fromLngLat(user.longitude, user.latitude))
+        style.addSource(GeoJsonSource(SOURCE_USER, userFeature))
+        style.addLayer(
+            CircleLayer(LAYER_USER, SOURCE_USER).withProperties(
+                PropertyFactory.circleColor(USER_COLOR),
+                PropertyFactory.circleRadius(8f),
+                PropertyFactory.circleStrokeColor(AndroidColor.WHITE),
+                PropertyFactory.circleStrokeWidth(2.5f),
+                PropertyFactory.circleOpacity(0.95f)
+            )
+        )
+    }
 }
 
 private fun addWindCircleLayer(
@@ -516,17 +565,27 @@ private fun addWindCircleLayer(
 private fun fitCamera(
     map: MapLibreMap,
     history: List<TyphoonPoint>,
-    forecast: List<TyphoonPoint>
+    forecast: List<TyphoonPoint>,
+    userLocation: UserLocation? = null
 ) {
     val points = history + forecast
-    if (points.isEmpty()) return
-    val valid = points.filter { it.lat in -90.0..90.0 && it.lng in -180.0..180.0 }
-    if (valid.isEmpty()) return
+    if (points.isEmpty() && userLocation?.isValid != true) return
+    val valid = points.filter { it.lat in -90.0..90.0 && it.lng in -180.0..180.0 }.toMutableList()
+    val user = userLocation?.takeIf { it.isValid }
 
-    var minLat = valid.minOf { it.lat }
-    var maxLat = valid.maxOf { it.lat }
-    var minLng = valid.minOf { it.lng }
-    var maxLng = valid.maxOf { it.lng }
+    if (valid.isEmpty() && user == null) return
+
+    var minLat = valid.minOfOrNull { it.lat } ?: user!!.latitude
+    var maxLat = valid.maxOfOrNull { it.lat } ?: user!!.latitude
+    var minLng = valid.minOfOrNull { it.lng } ?: user!!.longitude
+    var maxLng = valid.maxOfOrNull { it.lng } ?: user!!.longitude
+
+    if (user != null) {
+        minLat = minOf(minLat, user.latitude)
+        maxLat = maxOf(maxLat, user.latitude)
+        minLng = minOf(minLng, user.longitude)
+        maxLng = maxOf(maxLng, user.longitude)
+    }
 
     history.lastOrNull()?.let { current ->
         val maxR = listOfNotNull(
@@ -543,10 +602,11 @@ private fun fitCamera(
         }
     }
 
-    if (valid.size == 1 && maxLat - minLat < 0.4 && maxLng - minLng < 0.4) {
+    if (valid.size <= 1 && user == null && maxLat - minLat < 0.4 && maxLng - minLng < 0.4) {
+        val p = valid.firstOrNull() ?: return
         map.moveCamera(
             CameraUpdateFactory.newLatLngZoom(
-                LatLng(valid.first().lat, valid.first().lng),
+                LatLng(p.lat, p.lng),
                 5.5
             )
         )
@@ -563,6 +623,9 @@ private fun fitCamera(
         builder.include(LatLng(midLat - latSpan / 2, midLng - lngSpan / 2))
         builder.include(LatLng(midLat + latSpan / 2, midLng + lngSpan / 2))
         valid.forEach { builder.include(LatLng(it.lat, it.lng)) }
+        if (user != null) {
+            builder.include(LatLng(user.latitude, user.longitude))
+        }
         map.moveCamera(CameraUpdateFactory.newLatLngBounds(builder.build(), 72))
     }.onFailure {
         map.moveCamera(CameraUpdateFactory.newLatLngZoom(LatLng(midLat, midLng), 4.5))

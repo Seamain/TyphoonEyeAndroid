@@ -81,7 +81,7 @@ fun PointTimelineItem(
         ) {
             Column(modifier = Modifier.padding(12.dp)) {
                 Text(
-                    text = formatObservationTime(point.time),
+                    text = formatObservationTime(point.time, context = context, showRelative = !isForecast),
                     style = MaterialTheme.typography.labelLarge,
                     fontWeight = FontWeight.SemiBold,
                     color = color

@@ -79,6 +79,9 @@ import seamain.org.typhoonEye.BuildConfig
 import seamain.org.typhoonEye.R
 import seamain.org.typhoonEye.domain.model.Typhoon
 import seamain.org.typhoonEye.domain.model.TyphoonPoint
+import seamain.org.typhoonEye.domain.model.UserLocation
+import seamain.org.typhoonEye.domain.util.distanceKmFrom
+import seamain.org.typhoonEye.domain.util.roundKm
 import seamain.org.typhoonEye.ui.DataMode
 import seamain.org.typhoonEye.ui.TyphoonUiState
 import seamain.org.typhoonEye.ui.components.IntensityBadge
@@ -105,6 +108,7 @@ fun HomeScreen(
     intensityFilter: IntensityLevel?,
     dataMode: DataMode,
     lastUpdated: String?,
+    userLocation: UserLocation? = null,
     onQueryChange: (String) -> Unit,
     onFilterChange: (IntensityLevel?) -> Unit,
     onRefresh: () -> Unit,
@@ -151,12 +155,6 @@ fun HomeScreen(
                         modifier = Modifier.semantics { contentDescription = settingsCd }
                     ) {
                         Icon(Icons.Filled.Settings, contentDescription = null)
-                    }
-                    IconButton(
-                        onClick = onRefresh,
-                        modifier = Modifier.semantics { contentDescription = refreshCd }
-                    ) {
-                        Icon(Icons.Outlined.Refresh, contentDescription = null)
                     }
                 },
                 colors = TopAppBarDefaults.largeTopAppBarColors(
@@ -247,6 +245,7 @@ fun HomeScreen(
                                 ) { typhoon ->
                                     TyphoonListCard(
                                         typhoon = typhoon,
+                                        userLocation = userLocation,
                                         onClick = { onTyphoonClick(typhoon) },
                                         modifier = Modifier.padding(horizontal = 16.dp, vertical = 5.dp)
                                     )
@@ -464,12 +463,14 @@ private fun SearchAndFilters(
 fun TyphoonListCard(
     typhoon: Typhoon,
     onClick: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    userLocation: UserLocation? = null
 ) {
     val intensity = typhoon.currentIntensity()
     val last = typhoon.latestPoint()
     val accent = intensityColor(intensity)
     val context = LocalContext.current
+    val distanceKm = typhoon.distanceKmFrom(userLocation)
     val cardCd = stringResource(R.string.cd_typhoon_card, typhoon.name, intensity.localizedLabel())
 
     // Native ripple from OutlinedCard's clickable handles press feedback
@@ -543,6 +544,16 @@ fun TyphoonListCard(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         maxLines = 2,
                         overflow = TextOverflow.Ellipsis
+                    )
+                }
+
+                if (distanceKm != null) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = stringResource(R.string.distance_from_you, distanceKm.roundKm()),
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.primary
                     )
                 }
 

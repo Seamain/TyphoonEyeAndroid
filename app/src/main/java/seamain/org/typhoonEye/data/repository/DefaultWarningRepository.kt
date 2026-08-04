@@ -17,17 +17,15 @@ import seamain.org.typhoonEye.domain.model.EmergencyAlert
 import seamain.org.typhoonEye.domain.model.Typhoon
 import seamain.org.typhoonEye.domain.model.UserLocation
 import seamain.org.typhoonEye.domain.repository.WarningRepository
+import seamain.org.typhoonEye.domain.util.distanceKmFrom
+import seamain.org.typhoonEye.domain.util.roundKm
 import seamain.org.typhoonEye.ui.util.IntensityLevel
 import seamain.org.typhoonEye.ui.util.currentIntensity
 import seamain.org.typhoonEye.ui.util.label
 import seamain.org.typhoonEye.ui.util.latestPoint
 import java.util.Locale
 import javax.inject.Inject
-import kotlin.math.atan2
-import kotlin.math.cos
 import kotlin.math.roundToInt
-import kotlin.math.sin
-import kotlin.math.sqrt
 
 /**
  * Official typhoon alerts (QWeather) + intensity-based urgency tips.
@@ -94,11 +92,7 @@ class DefaultWarningRepository @Inject constructor(
         return activeTyphoons.mapNotNull { typhoon ->
             val level = typhoon.currentIntensity()
             val last = typhoon.latestPoint()
-            val distanceKm = if (userLocation != null && last != null) {
-                haversineKm(userLocation.latitude, userLocation.longitude, last.lat, last.lng)
-            } else {
-                null
-            }
+            val distanceKm = typhoon.distanceKmFrom(userLocation)
 
             // With user location: only notify intensity for storms within range
             // (or still Super typhoons which are regionally significant).
@@ -130,7 +124,7 @@ class DefaultWarningRepository @Inject constructor(
             }
             val intensityLabel = level.label(appContext)
             val distanceText = distanceKm?.let { km ->
-                appContext.getString(R.string.alert_distance_km, km.roundToInt())
+                appContext.getString(R.string.alert_distance_km, km.roundKm())
             }.orEmpty()
 
             EmergencyAlert(
@@ -240,18 +234,6 @@ class DefaultWarningRepository @Inject constructor(
             }
 
             return (fromStorms + COASTAL_WATCHPOINTS).distinctBy { "${it.first}|${it.second}" }
-        }
-
-        /** Great-circle distance in kilometers. */
-        fun haversineKm(lat1: Double, lon1: Double, lat2: Double, lon2: Double): Double {
-            val r = 6371.0
-            val dLat = Math.toRadians(lat2 - lat1)
-            val dLon = Math.toRadians(lon2 - lon1)
-            val a = sin(dLat / 2) * sin(dLat / 2) +
-                cos(Math.toRadians(lat1)) * cos(Math.toRadians(lat2)) *
-                sin(dLon / 2) * sin(dLon / 2)
-            val c = 2 * atan2(sqrt(a), sqrt(1 - a))
-            return r * c
         }
     }
 }

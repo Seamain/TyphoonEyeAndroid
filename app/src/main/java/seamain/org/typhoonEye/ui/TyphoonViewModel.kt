@@ -11,6 +11,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import seamain.org.typhoonEye.R
@@ -24,11 +25,14 @@ import seamain.org.typhoonEye.domain.model.TyphoonPoint
 import seamain.org.typhoonEye.domain.model.UserLocation
 import seamain.org.typhoonEye.domain.repository.TyphoonRepository
 import seamain.org.typhoonEye.domain.repository.WarningRepository
+import seamain.org.typhoonEye.domain.util.distanceKmFrom
+import seamain.org.typhoonEye.domain.util.roundKm
 import seamain.org.typhoonEye.live.TyphoonAlertNotifier
 import seamain.org.typhoonEye.live.TyphoonLiveNotifier
 import seamain.org.typhoonEye.live.TyphoonLiveUpdateWorker
 import seamain.org.typhoonEye.ui.util.IntensityLevel
 import seamain.org.typhoonEye.ui.util.currentIntensity
+import seamain.org.typhoonEye.ui.util.formatObservationTime
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -80,13 +84,33 @@ class TyphoonViewModel @Inject constructor(
     private val _dataMode = MutableStateFlow(DataMode.Live)
     val dataMode: StateFlow<DataMode> = _dataMode.asStateFlow()
 
-    private val _lastUpdated = MutableStateFlow<String?>(null)
-    val lastUpdated: StateFlow<String?> = _lastUpdated.asStateFlow()
+    /** Epoch millis of last successful live/demo refresh; UI formats relatively. */
+    private val _lastUpdatedAtMs = MutableStateFlow<Long?>(null)
+    val lastUpdatedAtMs: StateFlow<Long?> = _lastUpdatedAtMs.asStateFlow()
+
+    @Deprecated("Use lastUpdatedAtMs", ReplaceWith("lastUpdatedAtMs"))
+    val lastUpdated: StateFlow<String?> = _lastUpdatedAtMs
+        .map<Long?, String?> { epoch ->
+            epoch?.let {
+                val formatted = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()).format(java.util.Date(it))
+                formatObservationTime(formatted)
+            }
+        }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
     private val _allTyphoons = MutableStateFlow<List<Typhoon>>(emptyList())
 
     val settings: StateFlow<UserSettings> = preferences.settings
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), UserSettings())
+
+    /** Latest device fix (live) or DataStore cache — used for distance UI + map. */
+    private val _liveUserLocation = MutableStateFlow<UserLocation?>(null)
+    val userLocation: StateFlow<UserLocation?> = combine(
+        settings,
+        _liveUserLocation
+    ) { prefs, live ->
+        live?.takeIf { it.isValid } ?: prefs.cachedUserLocation
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
     val filteredTyphoons: StateFlow<List<Typhoon>> = combine(
         _allTyphoons,
@@ -210,6 +234,7 @@ class TyphoonViewModel @Inject constructor(
             if (!locationProvider.hasLocationPermission()) return@launch
             val fix = locationProvider.getLocation() ?: return@launch
             preferences.cacheUserLocation(fix)
+            _liveUserLocation.value = fix
         }
     }
 
@@ -221,7 +246,7 @@ class TyphoonViewModel @Inject constructor(
             _allTyphoons.value = mock
             _uiState.value = TyphoonUiState.Success(mock, fromCache = false)
             _dataMode.value = DataMode.Demo
-            _lastUpdated.value = nowLabel()
+            _lastUpdatedAtMs.value = System.currentTimeMillis()
             _query.value = ""
             _intensityFilter.value = null
             _selectedTyphoon.value = null
@@ -265,10 +290,13 @@ class TyphoonViewModel @Inject constructor(
         if (locationProvider.hasLocationPermission()) {
             locationProvider.getLocation()?.let { fix ->
                 preferences.cacheUserLocation(fix)
+                _liveUserLocation.value = fix
                 return fix
             }
         }
-        return prefs.cachedUserLocation ?: preferences.getCachedUserLocation()
+        return userLocation.value
+            ?: prefs.cachedUserLocation
+            ?: preferences.getCachedUserLocation()
     }
 
     private fun syncBackgroundWorker(enabled: Boolean) {
@@ -297,7 +325,7 @@ class TyphoonViewModel @Inject constructor(
                         staleMessage = feed.staleMessage
                     )
                     _dataMode.value = DataMode.Live
-                    _lastUpdated.value = nowLabel()
+                    _lastUpdatedAtMs.value = System.currentTimeMillis()
                     _selectedTyphoon.value?.let { selected ->
                         _selectedTyphoon.value = feed.typhoons.find { it.id == selected.id } ?: selected
                     }
@@ -365,6 +393,9 @@ class TyphoonViewModel @Inject constructor(
             }
             if (typhoon.positionDesc.isNotBlank()) {
                 appendLine(appContext.getString(R.string.share_position, typhoon.positionDesc))
+            }
+            typhoon.distanceKmFrom(userLocation.value)?.let { km ->
+                appendLine(appContext.getString(R.string.distance_from_you, km.roundKm()))
             }
             if (last != null) {
                 appendLine(

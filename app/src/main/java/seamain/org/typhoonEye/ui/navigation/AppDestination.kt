@@ -6,6 +6,7 @@ package seamain.org.typhoonEye.ui.navigation
 object AppDestination {
     const val Home = "home"
     const val Settings = "settings"
+    const val Licenses = "licenses"
     const val Detail = "detail/{typhoonId}"
 
     fun detail(typhoonId: String): String = "detail/$typhoonId"

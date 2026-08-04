@@ -135,9 +135,191 @@ fun TyphoonPoint.moveLabel(context: Context): String =
 
 fun formatPressure(hPa: Int): String = "$hPa hPa"
 
-/** Drop trailing seconds: "2026-07-10 14:00:00" → "2026-07-10 14:00". */
-fun formatObservationTime(raw: String): String =
-    raw.trim().replace(Regex("""(\d{1,2}:\d{2}):\d{2}\s*$"""), "$1")
+/**
+ * Human-friendly observation / bulletin time.
+ *
+ * Accepts common Juhe / QWeather forms:
+ * - `2026-07-10 14:00:00`
+ * - `2026-07-11T09:00+08:00`
+ * - `2026-07-11T09:00:00Z`
+ * - already-compact `2026-07-10 14:00`
+ *
+ * Output (default locale):
+ * - same calendar day → `今天 14:00` / `Today 14:00`
+ * - same year → `7月10日 14:00` / `Jul 10, 14:00`
+ * - otherwise → `2026-07-10 14:00`
+ */
+/**
+ * Human-friendly observation / bulletin time.
+ *
+ * Accepts common Juhe / QWeather forms:
+ * - `2026-07-10 14:00:00`
+ * - `2026-07-11T09:00+08:00`
+ * - `2026-07-11T09:00:00Z`
+ * - already-compact `2026-07-10 14:00`
+ *
+ * Output (default locale):
+ * - same calendar day → `今天 14:00` / `Today 14:00`
+ * - yesterday → `昨天 14:00` / `Yesterday 14:00`
+ * - same year → `7月10日 14:00` / `Jul 10, 14:00`
+ * - otherwise → `2026-07-10 14:00`
+ */
+fun formatObservationTime(
+    raw: String,
+    context: Context? = null,
+    showRelative: Boolean = false
+): String {
+    val text = raw.trim()
+    if (text.isEmpty()) return "—"
+    val epochMs = parseFlexibleDateTime(text) ?: return fallbackStripSeconds(text)
+    val formattedDate = formatDateTimeFriendly(epochMs, context)
+    if (!showRelative) return formattedDate
+
+    val deltaSec = ((System.currentTimeMillis() - epochMs) / 1000L)
+    if (deltaSec in 0..86400 * 2) {
+        val relativeLabel = when {
+            deltaSec < 60L -> context?.getString(R.string.updated_just_now)
+            deltaSec < 3600L -> {
+                val mins = (deltaSec / 60L).toInt()
+                context?.getString(R.string.time_minutes_ago, mins)
+            }
+            deltaSec < 86400L -> {
+                val hours = (deltaSec / 3600L).toInt()
+                context?.getString(R.string.time_hours_ago, hours)
+            }
+            else -> null
+        }
+        if (relativeLabel != null && context != null) {
+            return context.getString(R.string.time_observed_with_relative, formattedDate, relativeLabel)
+        }
+    }
+    return formattedDate
+}
+
+/** Relative / clock label for "data refreshed at" (epoch millis). */
+fun formatDataUpdatedAt(context: Context, epochMs: Long, nowMs: Long = System.currentTimeMillis()): String {
+    if (epochMs <= 0L) return "—"
+    val deltaSec = ((nowMs - epochMs) / 1000L).coerceAtLeast(0L)
+    return when {
+        deltaSec < 45L -> context.getString(R.string.updated_just_now)
+        deltaSec < 60L * 60L -> {
+            val mins = (deltaSec / 60L).coerceAtLeast(1L).toInt()
+            context.getString(R.string.updated_minutes_ago, mins)
+        }
+        isSameLocalDay(epochMs, nowMs) -> {
+            val clock = formatClockHm(epochMs)
+            context.getString(R.string.updated_today_at, clock)
+        }
+        else -> {
+            val stamp = formatDateTimeFriendly(epochMs, context)
+            context.getString(R.string.updated_at, stamp)
+        }
+    }
+}
+
+private fun fallbackStripSeconds(text: String): String =
+    text.replace(Regex("""(\d{1,2}:\d{2}):\d{2}\s*$"""), "$1")
+        .replace('T', ' ')
+        .replace(Regex("""([+-]\d{2}:?\d{2}|Z)$"""), "")
+        .trim()
+
+private fun parseFlexibleDateTime(raw: String): Long? {
+    val candidates = buildList {
+        add(raw)
+        // Normalize space to T for ISO parsers
+        if (' ' in raw && 'T' !in raw) add(raw.replace(' ', 'T'))
+        // Drop trailing zone for some formatters
+        add(raw.replace(Regex("""([+-]\d{2}:\d{2}|Z)$"""), ""))
+        add(raw.replace(Regex("""([+-]\d{2}:\d{2}|Z)$"""), "").replace(' ', 'T'))
+    }.distinct()
+
+    val patterns = listOf(
+        "yyyy-MM-dd'T'HH:mm:ssXXX",
+        "yyyy-MM-dd'T'HH:mm:ssXX",
+        "yyyy-MM-dd'T'HH:mmXXX",
+        "yyyy-MM-dd'T'HH:mm:ss",
+        "yyyy-MM-dd'T'HH:mm",
+        "yyyy-MM-dd HH:mm:ss",
+        "yyyy-MM-dd HH:mm",
+        "yyyy/MM/dd HH:mm:ss",
+        "yyyy/MM/dd HH:mm",
+        "yyyyMMddHHmm",
+        "yyyyMMddHH"
+    )
+    for (value in candidates) {
+        for (pattern in patterns) {
+            runCatching {
+                val formatter = java.time.format.DateTimeFormatter.ofPattern(pattern)
+                    .withZone(java.time.ZoneId.systemDefault())
+                // Prefer OffsetDateTime when zone present
+                if (pattern.contains("X")) {
+                    val odt = java.time.OffsetDateTime.parse(value, java.time.format.DateTimeFormatter.ofPattern(pattern))
+                    return odt.toInstant().toEpochMilli()
+                }
+                val ldt = java.time.LocalDateTime.parse(value, formatter)
+                return ldt.atZone(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli()
+            }
+        }
+        runCatching {
+            return java.time.Instant.parse(value).toEpochMilli()
+        }
+        runCatching {
+            return java.time.OffsetDateTime.parse(value).toInstant().toEpochMilli()
+        }
+    }
+    return null
+}
+
+private fun formatDateTimeFriendly(
+    epochMs: Long,
+    context: Context? = null,
+    nowMs: Long = System.currentTimeMillis()
+): String {
+    val zone = java.time.ZoneId.systemDefault()
+    val dt = java.time.Instant.ofEpochMilli(epochMs).atZone(zone)
+    val now = java.time.Instant.ofEpochMilli(nowMs).atZone(zone)
+    val locale = Locale.getDefault()
+    val timeStr = dt.toLocalTime().format(java.time.format.DateTimeFormatter.ofPattern("HH:mm"))
+
+    val todayDate = now.toLocalDate()
+    val yesterdayDate = todayDate.minusDays(1)
+    val targetDate = dt.toLocalDate()
+
+    return when {
+        targetDate == todayDate -> {
+            context?.getString(R.string.time_today_format, timeStr)
+                ?: if (locale.language == "zh" || locale.language == "yue") "今天 $timeStr" else "Today $timeStr"
+        }
+        targetDate == yesterdayDate -> {
+            context?.getString(R.string.time_yesterday_format, timeStr)
+                ?: if (locale.language == "zh" || locale.language == "yue") "昨天 $timeStr" else "Yesterday $timeStr"
+        }
+        dt.year == now.year && (locale.language == "zh" || locale.language == "yue") -> {
+            dt.format(java.time.format.DateTimeFormatter.ofPattern("M月d日 HH:mm"))
+        }
+        dt.year == now.year -> {
+            dt.format(java.time.format.DateTimeFormatter.ofPattern("MMM d, HH:mm", locale))
+        }
+        locale.language == "zh" || locale.language == "yue" -> {
+            dt.format(java.time.format.DateTimeFormatter.ofPattern("yyyy年M月d日 HH:mm"))
+        }
+        else -> {
+            dt.format(java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm"))
+        }
+    }
+}
+
+private fun formatClockHm(epochMs: Long): String {
+    val dt = java.time.Instant.ofEpochMilli(epochMs).atZone(java.time.ZoneId.systemDefault())
+    return dt.toLocalTime().format(java.time.format.DateTimeFormatter.ofPattern("HH:mm"))
+}
+
+private fun isSameLocalDay(aMs: Long, bMs: Long): Boolean {
+    val zone = java.time.ZoneId.systemDefault()
+    val a = java.time.Instant.ofEpochMilli(aMs).atZone(zone).toLocalDate()
+    val b = java.time.Instant.ofEpochMilli(bMs).atZone(zone).toLocalDate()
+    return a == b
+}
 
 fun formatCoordinate(lat: Double, lng: Double): String {
     val latDir = if (lat >= 0) "N" else "S"

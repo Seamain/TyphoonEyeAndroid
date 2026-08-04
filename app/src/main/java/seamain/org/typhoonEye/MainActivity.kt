@@ -48,6 +48,7 @@ import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import seamain.org.typhoonEye.ui.screens.LicensesScreen
 import androidx.navigation.navArgument
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -148,6 +149,7 @@ fun TyphoonApp(
     val lastUpdated by viewModel.lastUpdated.collectAsStateWithLifecycle()
     val dataMode by viewModel.dataMode.collectAsStateWithLifecycle()
     val settings by viewModel.settings.collectAsStateWithLifecycle()
+    val userLocation by viewModel.userLocation.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val navController = rememberNavController()
 
@@ -230,15 +232,32 @@ fun TyphoonApp(
         }
     }
 
+    // Cold start: sync permission state, then request missing ones once
+    // (notification for Live/alerts, location for distance + local warnings).
     LaunchedEffect(Unit) {
         notificationsGranted = viewModel.canPostLiveNotifications()
         locationGranted = viewModel.hasLocationPermission()
-        if (locationGranted && settings.locationAlertsEnabled) {
+
+        val needNotification =
+            (settings.liveActivityEnabled || settings.emergencyAlertsEnabled) &&
+                !notificationsGranted
+        if (needNotification && !askedNotificationPermission) {
+            askedNotificationPermission = true
+            requestNotificationPermission()
+        } else if (notificationsGranted) {
+            viewModel.refreshLiveActivity()
+            TyphoonLiveUpdateWorker.schedule(context.applicationContext)
+        }
+
+        if (locationGranted) {
             viewModel.refreshUserLocation(force = true)
+        } else if (!askedLocationPermission) {
+            askedLocationPermission = true
+            requestLocationPermission()
         }
     }
 
-    // Request notification permission once when Live 状态 or emergency alerts are enabled.
+    // If user later turns Live / emergency alerts on, ensure notification permission.
     LaunchedEffect(settings.liveActivityEnabled, settings.emergencyAlertsEnabled) {
         if (!settings.liveActivityEnabled && !settings.emergencyAlertsEnabled) return@LaunchedEffect
         val allowed = viewModel.canPostLiveNotifications()
@@ -252,9 +271,9 @@ fun TyphoonApp(
         }
     }
 
-    // One-shot location permission when location-based alerts are on.
-    LaunchedEffect(settings.locationAlertsEnabled, settings.emergencyAlertsEnabled) {
-        if (!settings.locationAlertsEnabled || !settings.emergencyAlertsEnabled) return@LaunchedEffect
+    // If user later enables location alerts without permission, ask again once.
+    LaunchedEffect(settings.locationAlertsEnabled) {
+        if (!settings.locationAlertsEnabled) return@LaunchedEffect
         locationGranted = viewModel.hasLocationPermission()
         if (locationGranted) {
             viewModel.refreshUserLocation(force = true)
@@ -298,6 +317,7 @@ fun TyphoonApp(
                 intensityFilter = intensityFilter,
                 dataMode = dataMode,
                 lastUpdated = lastUpdated,
+                userLocation = userLocation,
                 onQueryChange = viewModel::setQuery,
                 onFilterChange = viewModel::setIntensityFilter,
                 onRefresh = { viewModel.refresh() },
@@ -339,7 +359,19 @@ fun TyphoonApp(
                 },
                 onDynamicColorChange = viewModel::setDynamicColorEnabled,
                 onRequestNotificationPermission = ::requestNotificationPermission,
-                onRequestLocationPermission = ::requestLocationPermission
+                onRequestLocationPermission = ::requestLocationPermission,
+                onOpenLicenses = {
+                    navController.navigate(AppDestination.Licenses) {
+                        launchSingleTop = true
+                    }
+                }
+            )
+        }
+
+        composable(AppDestination.Licenses) {
+            BackHandler { navController.popBackStack() }
+            LicensesScreen(
+                onBack = { navController.popBackStack() }
             )
         }
 
@@ -370,6 +402,7 @@ fun TyphoonApp(
                         loading = detailLoading,
                         onBack = ::leaveDetail,
                         shareText = viewModel.shareSummary(typhoon),
+                        userLocation = userLocation,
                         onShare = { text ->
                             val intent = Intent(Intent.ACTION_SEND).apply {
                                 type = "text/plain"

@@ -37,6 +37,7 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.PrimaryTabRow
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
@@ -60,6 +61,9 @@ import androidx.compose.ui.unit.dp
 import seamain.org.typhoonEye.R
 import seamain.org.typhoonEye.domain.model.Typhoon
 import seamain.org.typhoonEye.domain.model.TyphoonPoint
+import seamain.org.typhoonEye.domain.model.UserLocation
+import seamain.org.typhoonEye.domain.util.distanceKmFrom
+import seamain.org.typhoonEye.domain.util.roundKm
 import seamain.org.typhoonEye.ui.components.IntensityBadge
 import seamain.org.typhoonEye.ui.components.MetricGrid
 import seamain.org.typhoonEye.ui.components.MetricItem
@@ -74,6 +78,8 @@ import seamain.org.typhoonEye.ui.util.formatCoordinate
 import seamain.org.typhoonEye.ui.util.formatObservationTime
 import seamain.org.typhoonEye.ui.util.latestPoint
 import seamain.org.typhoonEye.ui.util.moveLabel
+import seamain.org.typhoonEye.ui.util.quadrants
+import seamain.org.typhoonEye.ui.util.WindRadiiKm
 import seamain.org.typhoonEye.ui.util.windRadii10
 import seamain.org.typhoonEye.ui.util.windRadii12
 import seamain.org.typhoonEye.ui.util.windRadii7
@@ -85,7 +91,8 @@ fun DetailScreen(
     onBack: () -> Unit,
     onShare: (String) -> Unit,
     shareText: String,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    userLocation: UserLocation? = null
 ) {
     var tabIndex by rememberSaveable { mutableIntStateOf(0) }
     val tabs = listOf(
@@ -189,11 +196,13 @@ fun DetailScreen(
                         typhoon = typhoon,
                         loading = loading,
                         last = last,
+                        userLocation = userLocation,
                         modifier = Modifier.fillMaxSize()
                     )
                     1 -> TrackMapCard(
                         history = typhoon.points,
                         forecast = typhoon.forecastPoints,
+                        userLocation = userLocation,
                         modifier = Modifier
                             .fillMaxSize()
                             .padding(horizontal = 16.dp, vertical = 12.dp)
@@ -225,9 +234,11 @@ private fun OverviewTab(
     typhoon: Typhoon,
     loading: Boolean,
     last: TyphoonPoint?,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    userLocation: UserLocation? = null
 ) {
     val context = LocalContext.current
+    val distanceKm = typhoon.distanceKmFrom(userLocation)
     Column(
         modifier = modifier
             .verticalScroll(rememberScrollState())
@@ -249,28 +260,45 @@ private fun OverviewTab(
         }
 
         MetricGrid(
-            items = listOf(
-                MetricItem(
-                    label = stringResource(R.string.wind_speed),
-                    value = last?.let { "${it.speed} m/s" } ?: "—",
-                    icon = Icons.Filled.Air
-                ),
-                MetricItem(
-                    label = stringResource(R.string.pressure),
-                    value = last?.let { "${it.pressure} hPa" } ?: "—",
-                    icon = Icons.Filled.Speed
-                ),
-                MetricItem(
-                    label = stringResource(R.string.move),
-                    value = last?.moveLabel(context) ?: "—",
-                    icon = Icons.Filled.Explore
-                ),
-                MetricItem(
-                    label = stringResource(R.string.location),
-                    value = last?.let { formatCoordinate(it.lat, it.lng) } ?: "—",
-                    icon = Icons.Filled.Place
+            items = buildList {
+                add(
+                    MetricItem(
+                        label = stringResource(R.string.wind_speed),
+                        value = last?.let { "${it.speed} m/s" } ?: "—",
+                        icon = Icons.Filled.Air
+                    )
                 )
-            )
+                add(
+                    MetricItem(
+                        label = stringResource(R.string.pressure),
+                        value = last?.let { "${it.pressure} hPa" } ?: "—",
+                        icon = Icons.Filled.Speed
+                    )
+                )
+                add(
+                    MetricItem(
+                        label = stringResource(R.string.move),
+                        value = last?.moveLabel(context) ?: "—",
+                        icon = Icons.Filled.Explore
+                    )
+                )
+                add(
+                    MetricItem(
+                        label = stringResource(R.string.location),
+                        value = last?.let { formatCoordinate(it.lat, it.lng) } ?: "—",
+                        icon = Icons.Filled.Place
+                    )
+                )
+                if (distanceKm != null) {
+                    add(
+                        MetricItem(
+                            label = stringResource(R.string.label_distance),
+                            value = stringResource(R.string.distance_from_you, distanceKm.roundKm()),
+                            icon = Icons.Filled.Timeline
+                        )
+                    )
+                }
+            }
         )
 
         last?.let { point ->
@@ -294,13 +322,22 @@ private fun OverviewTab(
                         )
                         Spacer(modifier = Modifier.height(8.dp))
                         r7?.let {
-                            InfoRow(label = stringResource(R.string.wind_radius_7), value = it.displayLabel())
+                            WindRadiusCardItem(
+                                title = stringResource(R.string.wind_radius_7),
+                                radii = it
+                            )
                         }
                         r10?.let {
-                            InfoRow(label = stringResource(R.string.wind_radius_10), value = it.displayLabel())
+                            WindRadiusCardItem(
+                                title = stringResource(R.string.wind_radius_10),
+                                radii = it
+                            )
                         }
                         r12?.let {
-                            InfoRow(label = stringResource(R.string.wind_radius_12), value = it.displayLabel())
+                            WindRadiusCardItem(
+                                title = stringResource(R.string.wind_radius_12),
+                                radii = it
+                            )
                         }
                     }
                 }
@@ -336,10 +373,16 @@ private fun OverviewTab(
         Spacer(modifier = Modifier.height(12.dp))
         InfoRow(label = stringResource(R.string.label_id), value = typhoon.id)
         if (typhoon.startTime.isNotBlank()) {
-            InfoRow(label = stringResource(R.string.label_start_time), value = formatObservationTime(typhoon.startTime))
+            InfoRow(
+                label = stringResource(R.string.label_start_time),
+                value = formatObservationTime(typhoon.startTime, context = context)
+            )
         }
         if (typhoon.endTime.isNotBlank()) {
-            InfoRow(label = stringResource(R.string.label_latest_time), value = formatObservationTime(typhoon.endTime))
+            InfoRow(
+                label = stringResource(R.string.label_latest_time),
+                value = formatObservationTime(typhoon.endTime, context = context, showRelative = true)
+            )
         }
         InfoRow(
             label = stringResource(R.string.label_track_points),
@@ -512,5 +555,105 @@ private fun DetailScreenPreview() {
             onShare = {},
             shareText = "preview"
         )
+    }
+}
+
+@Composable
+private fun WindRadiusCardItem(
+    title: String,
+    radii: WindRadiiKm
+) {
+    val context = LocalContext.current
+    val quadrants = radii.quadrants()
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp),
+        shape = MaterialTheme.shapes.medium,
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainer
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+    ) {
+        Column(modifier = Modifier.padding(12.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.primary
+                )
+                Text(
+                    text = radii.displayLabel(context),
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+            }
+
+            if (!radii.isSymmetric && radii.hasAny) {
+                Spacer(modifier = Modifier.height(8.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    for (q in quadrants.take(2)) {
+                        QuadrantChip(
+                            label = stringResource(q.labelRes),
+                            km = q.km,
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+                }
+                Spacer(modifier = Modifier.height(6.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    for (q in quadrants.drop(2).take(2)) {
+                        QuadrantChip(
+                            label = stringResource(q.labelRes),
+                            km = q.km,
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun QuadrantChip(
+    label: String,
+    km: Int,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        modifier = modifier,
+        shape = MaterialTheme.shapes.small,
+        color = MaterialTheme.colorScheme.surfaceContainerLowest
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Text(
+                text = if (km > 0) "$km km" else "—",
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.Medium,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+        }
     }
 }

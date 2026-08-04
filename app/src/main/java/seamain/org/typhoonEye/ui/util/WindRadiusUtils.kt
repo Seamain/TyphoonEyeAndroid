@@ -18,6 +18,12 @@ data class WindRadiiKm(
 ) {
     val maxKm: Double get() = maxOf(ne, se, sw, nw)
     val hasAny: Boolean get() = maxKm > 0.0
+    val isSymmetric: Boolean get() = ne == se && se == sw && sw == nw
+    val avgKm: Double
+        get() {
+            val vals = listOf(ne, se, sw, nw).filter { it > 0.0 }
+            return if (vals.isEmpty()) 0.0 else vals.average()
+        }
 }
 
 /**
@@ -111,14 +117,46 @@ fun destinationPoint(
     return Math.toDegrees(φ2) to Math.toDegrees(λ2)
 }
 
+/** Single-line summary, e.g. "280 km" or "最大 280 km · 平均 252 km". */
 fun WindRadiiKm.displayLabel(): String {
-    // Show NE/SE/SW/NW when asymmetric; otherwise a single value.
-    return if (ne == se && se == sw && sw == nw) {
-        "${ne.toInt()} km"
+    val max = maxKm.toInt()
+    if (!hasAny) return "—"
+    return if (isSymmetric) {
+        "$max km"
     } else {
-        "NE ${ne.toInt()} · SE ${se.toInt()} · SW ${sw.toInt()} · NW ${nw.toInt()} km"
+        val avg = avgKm.toInt()
+        if (avg > 0 && avg != max) "最大 ${max} km · 平均 ${avg} km" else "最大 ${max} km"
     }
 }
+
+/** Localized single-line summary. */
+fun WindRadiiKm.displayLabel(context: android.content.Context): String {
+    val max = maxKm.toInt()
+    if (!hasAny) return "—"
+    return if (isSymmetric) {
+        context.getString(seamain.org.typhoonEye.R.string.wind_radius_symmetric, max)
+    } else {
+        val avg = avgKm.toInt()
+        if (avg > 0 && avg != max) {
+            context.getString(seamain.org.typhoonEye.R.string.wind_radius_asymmetric_summary, max, avg)
+        } else {
+            "$max km"
+        }
+    }
+}
+
+data class WindQuadrantValue(
+    val key: String,
+    val labelRes: Int,
+    val km: Int
+)
+
+fun WindRadiiKm.quadrants(): List<WindQuadrantValue> = listOf(
+    WindQuadrantValue("NE", seamain.org.typhoonEye.R.string.direction_ne, ne.toInt()),
+    WindQuadrantValue("SE", seamain.org.typhoonEye.R.string.direction_se, se.toInt()),
+    WindQuadrantValue("SW", seamain.org.typhoonEye.R.string.direction_sw, sw.toInt()),
+    WindQuadrantValue("NW", seamain.org.typhoonEye.R.string.direction_nw, nw.toInt())
+)
 
 /** Approximate lat/lng padding (degrees) for camera fit given max radius km. */
 fun windRadiusPaddingDegrees(lat: Double, radiusKm: Double): Pair<Double, Double> {

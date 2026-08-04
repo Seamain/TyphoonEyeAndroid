@@ -15,8 +15,11 @@ import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.clickable
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.outlined.Code
 import androidx.compose.material.icons.outlined.DarkMode
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Language
@@ -75,6 +78,7 @@ fun SettingsScreen(
     onDynamicColorChange: (Boolean) -> Unit,
     onRequestNotificationPermission: () -> Unit,
     onRequestLocationPermission: () -> Unit,
+    onOpenLicenses: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -368,6 +372,34 @@ fun SettingsScreen(
                         )
                     },
                     colors = ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.surface)
+                )
+                HorizontalDivider(
+                    modifier = Modifier.padding(start = 56.dp, end = 16.dp),
+                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f)
+                )
+                ListItem(
+                    headlineContent = { Text(stringResource(R.string.open_source_licenses)) },
+                    supportingContent = { Text(stringResource(R.string.open_source_licenses_subtitle)) },
+                    leadingContent = {
+                        Icon(
+                            Icons.Outlined.Code,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    },
+                    trailingContent = {
+                        Icon(
+                            Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    },
+                    colors = ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.surface),
+                    modifier = Modifier
+                        .clickable(onClick = onOpenLicenses)
+                        .semantics {
+                            contentDescription = context.getString(R.string.open_source_licenses)
+                        }
                 )
             }
         }

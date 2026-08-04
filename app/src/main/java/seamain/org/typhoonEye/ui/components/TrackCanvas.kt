@@ -34,6 +34,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.unit.dp
 import seamain.org.typhoonEye.R
 import seamain.org.typhoonEye.domain.model.TyphoonPoint
+import seamain.org.typhoonEye.domain.model.UserLocation
 import seamain.org.typhoonEye.ui.util.WindRadiiKm
 import seamain.org.typhoonEye.ui.util.intensityColor
 import seamain.org.typhoonEye.ui.util.resolveIntensity
@@ -50,14 +51,17 @@ private val Wind12Color = Color(0xFFEF5350)
 fun TrackMapCard(
     history: List<TyphoonPoint>,
     forecast: List<TyphoonPoint>,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    userLocation: UserLocation? = null
 ) {
     val historyColor = MaterialTheme.colorScheme.primary
     val forecastColor = MaterialTheme.colorScheme.tertiary
+    val youColor = MaterialTheme.colorScheme.secondary
     val current = history.lastOrNull()
     val hasWind = current?.let {
         it.windRadii7() != null || it.windRadii10() != null || it.windRadii12() != null
     } == true
+    val hasYou = userLocation?.isValid == true
 
     Card(
         modifier = modifier.fillMaxSize(),
@@ -77,10 +81,10 @@ fun TrackMapCard(
                 style = MaterialTheme.typography.titleMedium
             )
             Text(
-                text = if (hasWind) {
-                    stringResource(R.string.track_map_hint_with_wind)
-                } else {
-                    stringResource(R.string.track_map_hint_no_wind)
+                text = when {
+                    hasYou -> stringResource(R.string.track_map_hint_with_you)
+                    hasWind -> stringResource(R.string.track_map_hint_with_wind)
+                    else -> stringResource(R.string.track_map_hint_no_wind)
                 },
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -105,6 +109,7 @@ fun TrackMapCard(
                         forecast = forecast,
                         historyColor = historyColor,
                         forecastColor = forecastColor,
+                        userLocation = userLocation,
                         modifier = Modifier.fillMaxSize()
                     )
                 }
@@ -119,6 +124,10 @@ fun TrackMapCard(
                 LegendDot(color = historyColor, label = stringResource(R.string.legend_history))
                 Spacer(modifier = Modifier.width(12.dp))
                 LegendDot(color = forecastColor, label = stringResource(R.string.legend_forecast))
+                if (hasYou) {
+                    Spacer(modifier = Modifier.width(12.dp))
+                    LegendDot(color = youColor, label = stringResource(R.string.legend_you))
+                }
                 if (hasWind) {
                     Spacer(modifier = Modifier.width(12.dp))
                     LegendDot(color = Wind7Color, label = stringResource(R.string.wind_radius_7))
