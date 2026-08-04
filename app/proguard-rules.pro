@@ -58,3 +58,8 @@
     public static **[] values();
     public static ** valueOf(java.lang.String);
 }
+
+# Ed25519 cryptography library (EdDSA)
+-dontwarn sun.security.x509.**
+-dontwarn net.i2p.crypto.eddsa.**
+-keep class net.i2p.crypto.eddsa.** { *; }
