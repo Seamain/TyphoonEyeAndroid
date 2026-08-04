@@ -23,10 +23,11 @@ fun String.asBuildConfigLiteral(): String =
         .replace("\r", "") + "\""
 
 fun prop(name: String, vararg aliases: String): String {
-    val value = sequenceOf(name, *aliases)
-        .mapNotNull { localProperties.getProperty(it)?.takeIf(String::isNotBlank) }
-        .firstOrNull()
-        .orEmpty()
+    val keys = sequenceOf(name, *aliases)
+    val value = keys.mapNotNull { key ->
+        localProperties.getProperty(key)?.takeIf(String::isNotBlank)
+            ?: System.getenv(key)?.takeIf(String::isNotBlank)
+    }.firstOrNull().orEmpty()
     return value.asBuildConfigLiteral()
 }
 
@@ -43,8 +44,8 @@ android {
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
-        // Inject API keys from local.properties (see local.properties.example)
-        buildConfigField("String", "JUHE_KEY", prop("JUHE_KEY"))
+        // Inject API keys from local.properties or System environment
+        buildConfigField("String", "JUHE_KEY", prop("JUHE_KEY", "JUHE_API_KEY", "JUHEKEY"))
         buildConfigField("String", "QWEATHER_API_KEY", prop("QWEATHER_API_KEY"))
         buildConfigField("String", "QWEATHER_KID", prop("QWEATHER_KID", "QWEATHER_PUBLIC_ID"))
         buildConfigField("String", "QWEATHER_PROJECT_ID", prop("QWEATHER_PROJECT_ID"))

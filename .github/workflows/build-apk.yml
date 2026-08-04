@@ -50,6 +50,15 @@ jobs:
       - name: Prepare local.properties
         run: |
           touch local.properties
+          if [ -n "${{ secrets.JUHE_KEY }}" ]; then
+            echo "JUHE_KEY=${{ secrets.JUHE_KEY }}" >> local.properties
+          fi
+          if [ -n "${{ secrets.JUHE_API_KEY }}" ]; then
+            echo "JUHE_API_KEY=${{ secrets.JUHE_API_KEY }}" >> local.properties
+          fi
+          if [ -n "${{ secrets.JUHEKEY }}" ]; then
+            echo "JUHEKEY=${{ secrets.JUHEKEY }}" >> local.properties
+          fi
           if [ -n "${{ secrets.QWEATHER_API_KEY }}" ]; then
             echo "QWEATHER_API_KEY=${{ secrets.QWEATHER_API_KEY }}" >> local.properties
           fi
@@ -84,10 +93,18 @@ jobs:
 
       - name: Build Debug APK
         if: ${{ inputs.build_type == 'debug' }}
+        env:
+          JUHE_KEY: ${{ secrets.JUHE_KEY }}
+          JUHE_API_KEY: ${{ secrets.JUHE_API_KEY }}
+          JUHEKEY: ${{ secrets.JUHEKEY }}
         run: ./gradlew assembleDebug --stacktrace
 
       - name: Build Release APK
         if: ${{ inputs.build_type == 'release' || inputs.build_type == '' }}
+        env:
+          JUHE_KEY: ${{ secrets.JUHE_KEY }}
+          JUHE_API_KEY: ${{ secrets.JUHE_API_KEY }}
+          JUHEKEY: ${{ secrets.JUHEKEY }}
         run: ./gradlew assembleRelease --stacktrace
 
       - name: Process & Rename APK Artifacts
