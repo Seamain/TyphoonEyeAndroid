@@ -6,11 +6,21 @@ import android.util.Log
 import android.view.MotionEvent
 import android.view.View
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Map
+import androidx.compose.material.icons.outlined.Public
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -25,7 +35,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalInspectionMode
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -53,6 +67,10 @@ import seamain.org.typhoonEye.BuildConfig
 import seamain.org.typhoonEye.R
 import seamain.org.typhoonEye.domain.model.TyphoonPoint
 import seamain.org.typhoonEye.domain.model.UserLocation
+import seamain.org.typhoonEye.domain.util.CoordTransform
+import seamain.org.typhoonEye.ui.util.MapBasemap
+import seamain.org.typhoonEye.ui.util.MapBasemapPolicy
+import seamain.org.typhoonEye.ui.util.ResolvedBasemap
 import seamain.org.typhoonEye.ui.util.WindRadiiKm
 import seamain.org.typhoonEye.ui.util.intensityColor
 import seamain.org.typhoonEye.ui.util.resolveIntensity
@@ -86,6 +104,8 @@ private const val LAYER_USER = "ty-user-layer"
 private const val USER_COLOR = "#1E88E5"
 private const val ASSET_STYLE = "asset://map_style.json"
 private const val ASSET_STYLE_DARK = "asset://map_style_dark.json"
+private const val ASSET_STYLE_AMAP = "asset://map_style_amap.json"
+private const val ASSET_STYLE_AMAP_DARK = "asset://map_style_amap_dark.json"
 private const val DEMO_STYLE = "https://demotiles.maplibre.org/style.json"
 
 /** 七级风圈 — amber */
@@ -114,11 +134,18 @@ fun TyphoonTrackMap(
     historyColor: Color,
     forecastColor: Color,
     modifier: Modifier = Modifier,
-    userLocation: UserLocation? = null
+    userLocation: UserLocation? = null,
+    preferredBasemap: MapBasemap = MapBasemap.Auto
 ) {
     val inspection = LocalInspectionMode.current
+    val context = LocalContext.current
     var useFallback by remember { mutableStateOf(false) }
     var loadError by remember { mutableStateOf<String?>(null) }
+    // Prefer resolved basemap from Auto (region) or explicit user choice.
+    var basemap by remember(preferredBasemap) {
+        mutableStateOf(MapBasemapPolicy.resolve(preferredBasemap, context))
+    }
+    val useGcj02 = MapBasemapPolicy.usesGcj02(basemap)
 
     if (inspection || isRobolectricRuntime() || useFallback ||
         (history.isEmpty() && forecast.isEmpty())
@@ -148,12 +175,13 @@ fun TyphoonTrackMap(
 
     val historyHex = historyColor.toHexRgb()
     val forecastHex = forecastColor.toHexRgb()
-    val defaultStyleUri = if (darkTheme) ASSET_STYLE_DARK else ASSET_STYLE
+    val openStyleUri = if (darkTheme) ASSET_STYLE_DARK else ASSET_STYLE
+    val amapAssetUri = if (darkTheme) ASSET_STYLE_AMAP_DARK else ASSET_STYLE_AMAP
 
     val userKey = userLocation?.let { "${it.latitude},${it.longitude}" }.orEmpty()
 
     // Refresh track + wind layers when detail data arrives / updates.
-    LaunchedEffect(history, forecast, historyHex, forecastHex, mapReady, userKey) {
+    LaunchedEffect(history, forecast, historyHex, forecastHex, mapReady, userKey, useGcj02) {
         val style = styleRef.value ?: return@LaunchedEffect
         val map = mapRef.value ?: return@LaunchedEffect
         if (!mapReady) return@LaunchedEffect
@@ -164,9 +192,10 @@ fun TyphoonTrackMap(
                 forecast = forecast,
                 historyColorHex = historyHex,
                 forecastColorHex = forecastHex,
-                userLocation = userLocation
+                userLocation = userLocation,
+                useGcj02 = useGcj02
             )
-            fitCamera(map, history, forecast, userLocation)
+            fitCamera(map, history, forecast, userLocation, useGcj02)
         }.onFailure { e ->
             Log.e(TAG, "Failed to refresh track layers", e)
         }
@@ -213,7 +242,8 @@ fun TyphoonTrackMap(
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.surfaceContainerHighest)
     ) {
-        key(darkTheme) {
+        // Key on preference + theme only — runtime fallback must not recreate MapView.
+        key(darkTheme, preferredBasemap) {
             AndroidView(
                 factory = { ctx ->
                     try {
@@ -260,29 +290,31 @@ fun TyphoonTrackMap(
                         getMapAsync { map ->
                             try {
                                 mapRef.value = map
+                                // Hide stock MapLibre logo; we draw a basemap badge instead.
+                                map.uiSettings.isLogoEnabled = false
                                 map.uiSettings.isAttributionEnabled = true
                                 map.uiSettings.isCompassEnabled = true
                                 map.uiSettings.setAllGesturesEnabled(true)
-
-                                val custom = BuildConfig.MAPLIBRE_STYLE_URL.trim()
-                                val styleUri = when {
-                                    custom.isBlank() -> defaultStyleUri
-                                    custom.contains("openfreemap.org") -> defaultStyleUri
-                                    else -> custom
+                                // Keep attribution clear of our bottom-start badge.
+                                runCatching {
+                                    map.uiSettings.setAttributionMargins(12, 0, 12, 36)
                                 }
 
                                 fun bindStyle(style: Style) {
                                     try {
                                         styleRef.value = style
+                                        // Read live basemap state (may change after Amap → open fallback).
+                                        val gcj = MapBasemapPolicy.usesGcj02(basemap)
                                         applyTrackLayers(
                                             style = style,
                                             history = history,
                                             forecast = forecast,
                                             historyColorHex = historyHex,
                                             forecastColorHex = forecastHex,
-                                            userLocation = userLocation
+                                            userLocation = userLocation,
+                                            useGcj02 = gcj
                                         )
-                                        fitCamera(map, history, forecast, userLocation)
+                                        fitCamera(map, history, forecast, userLocation, gcj)
                                         post { mapReady = true }
                                     } catch (e: Exception) {
                                         Log.e(TAG, "Failed to draw track layers", e)
@@ -293,17 +325,53 @@ fun TyphoonTrackMap(
                                     }
                                 }
 
-                                map.setStyle(Style.Builder().fromUri(styleUri)) { style ->
-                                    bindStyle(style)
+                                fun loadOpenOrCustom() {
+                                    val custom = BuildConfig.MAPLIBRE_STYLE_URL.trim()
+                                    val styleUri = when {
+                                        custom.isBlank() -> openStyleUri
+                                        custom.contains("openfreemap.org") -> openStyleUri
+                                        else -> custom
+                                    }
+                                    map.setStyle(Style.Builder().fromUri(styleUri)) { style ->
+                                        bindStyle(style)
+                                    }
                                 }
 
-                                postDelayed({
-                                    if (!mapReady && !useFallback) {
-                                        map.setStyle(Style.Builder().fromUri(DEMO_STYLE)) { style ->
+                                when (basemap) {
+                                    ResolvedBasemap.Amap -> {
+                                        // Prefer runtime JSON so AMAP_KEY can be injected.
+                                        val json = MapBasemapPolicy.amapStyleJson(darkTheme)
+                                        map.setStyle(Style.Builder().fromJson(json)) { style ->
                                             bindStyle(style)
                                         }
+                                        // Fallback chain: asset amap → open carto → demo tiles
+                                        postDelayed({
+                                            if (!mapReady && !useFallback) {
+                                                Log.w(TAG, "Amap style slow/failed, trying asset then open basemap")
+                                                map.setStyle(Style.Builder().fromUri(amapAssetUri)) { style ->
+                                                    if (!mapReady) bindStyle(style)
+                                                }
+                                                postDelayed({
+                                                    if (!mapReady && !useFallback) {
+                                                        // Fall back to international tiles; badge follows.
+                                                        basemap = ResolvedBasemap.OpenStreet
+                                                        loadOpenOrCustom()
+                                                    }
+                                                }, 3500)
+                                            }
+                                        }, 4500)
                                     }
-                                }, 4500)
+                                    ResolvedBasemap.OpenStreet -> {
+                                        loadOpenOrCustom()
+                                        postDelayed({
+                                            if (!mapReady && !useFallback) {
+                                                map.setStyle(Style.Builder().fromUri(DEMO_STYLE)) { style ->
+                                                    bindStyle(style)
+                                                }
+                                            }
+                                        }, 4500)
+                                    }
+                                }
                             } catch (e: Exception) {
                                 Log.e(TAG, "getMapAsync failed", e)
                                 post {
@@ -333,6 +401,57 @@ fun TyphoonTrackMap(
                 style = MaterialTheme.typography.bodySmall
             )
         }
+
+        // Bottom-start provider badge — replaces MapLibre logo after Auto resolve.
+        if (!useFallback) {
+            MapProviderBadge(
+                basemap = basemap,
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .padding(start = 10.dp, bottom = 10.dp)
+            )
+        }
+    }
+}
+
+@Composable
+private fun MapProviderBadge(
+    basemap: ResolvedBasemap,
+    modifier: Modifier = Modifier
+) {
+    val label = when (basemap) {
+        ResolvedBasemap.Amap -> stringResource(R.string.map_badge_amap)
+        ResolvedBasemap.OpenStreet -> stringResource(R.string.map_badge_open)
+    }
+    val icon = when (basemap) {
+        ResolvedBasemap.Amap -> Icons.Outlined.Map
+        ResolvedBasemap.OpenStreet -> Icons.Outlined.Public
+    }
+    val cd = stringResource(R.string.cd_map_provider_badge, label)
+    Surface(
+        modifier = modifier.semantics { contentDescription = cd },
+        shape = RoundedCornerShape(20.dp),
+        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.92f),
+        tonalElevation = 2.dp,
+        shadowElevation = 2.dp
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                modifier = Modifier.size(16.dp),
+                tint = MaterialTheme.colorScheme.primary
+            )
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+        }
     }
 }
 
@@ -342,7 +461,8 @@ private fun applyTrackLayers(
     forecast: List<TyphoonPoint>,
     historyColorHex: String,
     forecastColorHex: String,
-    userLocation: UserLocation? = null
+    userLocation: UserLocation? = null,
+    useGcj02: Boolean = false
 ) {
     val layersToRemove = listOf(
         LAYER_USER, LAYER_USER_LINK,
@@ -372,7 +492,8 @@ private fun applyTrackLayers(
             fillColor = WIND7_FILL,
             lineColor = WIND7_LINE,
             fillOpacity = 0.18f,
-            lineOpacity = 0.75f
+            lineOpacity = 0.75f,
+            useGcj02 = useGcj02
         )
         addWindCircleLayer(
             style = style,
@@ -384,7 +505,8 @@ private fun applyTrackLayers(
             fillColor = WIND10_FILL,
             lineColor = WIND10_LINE,
             fillOpacity = 0.22f,
-            lineOpacity = 0.8f
+            lineOpacity = 0.8f,
+            useGcj02 = useGcj02
         )
         addWindCircleLayer(
             style = style,
@@ -396,12 +518,13 @@ private fun applyTrackLayers(
             fillColor = WIND12_FILL,
             lineColor = WIND12_LINE,
             fillOpacity = 0.28f,
-            lineOpacity = 0.85f
+            lineOpacity = 0.85f,
+            useGcj02 = useGcj02
         )
     }
 
     if (history.size >= 2) {
-        style.addSource(GeoJsonSource(SOURCE_HISTORY, lineString(history)))
+        style.addSource(GeoJsonSource(SOURCE_HISTORY, lineString(history, useGcj02)))
         style.addLayer(
             LineLayer(LAYER_HISTORY, SOURCE_HISTORY).withProperties(
                 PropertyFactory.lineColor(historyColorHex),
@@ -418,7 +541,7 @@ private fun applyTrackLayers(
         addAll(forecast)
     }
     if (forecastLine.size >= 2) {
-        style.addSource(GeoJsonSource(SOURCE_FORECAST, lineString(forecastLine)))
+        style.addSource(GeoJsonSource(SOURCE_FORECAST, lineString(forecastLine, useGcj02)))
         style.addLayer(
             LineLayer(LAYER_FORECAST, SOURCE_FORECAST).withProperties(
                 PropertyFactory.lineColor(forecastColorHex),
@@ -436,7 +559,8 @@ private fun applyTrackLayers(
         val level = resolveIntensity(point.strong, point.power)
         val color = intensityColor(level)
         val isCurrent = index == history.lastIndex
-        val feature = Feature.fromGeometry(Point.fromLngLat(point.lng, point.lat))
+        val (lng, lat) = mapLngLat(point.lng, point.lat, useGcj02)
+        val feature = Feature.fromGeometry(Point.fromLngLat(lng, lat))
         feature.addBooleanProperty("current", isCurrent)
         feature.addStringProperty("color", color.toHexRgb())
         pointFeatures += feature
@@ -444,7 +568,8 @@ private fun applyTrackLayers(
     forecast.forEach { point ->
         val level = resolveIntensity(point.strong, point.power)
         val color = if (level.rank > 0) intensityColor(level) else null
-        val feature = Feature.fromGeometry(Point.fromLngLat(point.lng, point.lat))
+        val (lng, lat) = mapLngLat(point.lng, point.lat, useGcj02)
+        val feature = Feature.fromGeometry(Point.fromLngLat(lng, lat))
         feature.addBooleanProperty("current", false)
         feature.addStringProperty("color", color?.toHexRgb() ?: forecastColorHex)
         pointFeatures += feature
@@ -492,11 +617,13 @@ private fun applyTrackLayers(
     val user = userLocation?.takeIf { it.isValid }
     val stormNow = history.lastOrNull()
     if (user != null) {
+        val (uLng, uLat) = mapLngLat(user.longitude, user.latitude, useGcj02)
         if (stormNow != null) {
+            val (sLng, sLat) = mapLngLat(stormNow.lng, stormNow.lat, useGcj02)
             val link = LineString.fromLngLats(
                 listOf(
-                    Point.fromLngLat(user.longitude, user.latitude),
-                    Point.fromLngLat(stormNow.lng, stormNow.lat)
+                    Point.fromLngLat(uLng, uLat),
+                    Point.fromLngLat(sLng, sLat)
                 )
             )
             style.addSource(GeoJsonSource(SOURCE_USER_LINK, link))
@@ -510,7 +637,7 @@ private fun applyTrackLayers(
                 )
             )
         }
-        val userFeature = Feature.fromGeometry(Point.fromLngLat(user.longitude, user.latitude))
+        val userFeature = Feature.fromGeometry(Point.fromLngLat(uLng, uLat))
         style.addSource(GeoJsonSource(SOURCE_USER, userFeature))
         style.addLayer(
             CircleLayer(LAYER_USER, SOURCE_USER).withProperties(
@@ -534,14 +661,18 @@ private fun addWindCircleLayer(
     fillColor: String,
     lineColor: String,
     fillOpacity: Float,
-    lineOpacity: Float
+    lineOpacity: Float,
+    useGcj02: Boolean = false
 ) {
     if (radii == null || !radii.hasAny) return
     val ring = windCircleRing(center.lat, center.lng, radii)
     if (ring.size < 4) return
 
     val coords = ArrayList<Point>(ring.size)
-    ring.forEach { (lat, lng) -> coords.add(Point.fromLngLat(lng, lat)) }
+    ring.forEach { (lat, lng) ->
+        val (mLng, mLat) = mapLngLat(lng, lat, useGcj02)
+        coords.add(Point.fromLngLat(mLng, mLat))
+    }
     val polygon = Polygon.fromLngLats(listOf(coords))
     style.addSource(GeoJsonSource(sourceId, polygon))
     style.addLayer(
@@ -566,25 +697,34 @@ private fun fitCamera(
     map: MapLibreMap,
     history: List<TyphoonPoint>,
     forecast: List<TyphoonPoint>,
-    userLocation: UserLocation? = null
+    userLocation: UserLocation? = null,
+    useGcj02: Boolean = false
 ) {
     val points = history + forecast
     if (points.isEmpty() && userLocation?.isValid != true) return
-    val valid = points.filter { it.lat in -90.0..90.0 && it.lng in -180.0..180.0 }.toMutableList()
+    val valid = points.filter { it.lat in -90.0..90.0 && it.lng in -180.0..180.0 }
     val user = userLocation?.takeIf { it.isValid }
 
     if (valid.isEmpty() && user == null) return
 
-    var minLat = valid.minOfOrNull { it.lat } ?: user!!.latitude
-    var maxLat = valid.maxOfOrNull { it.lat } ?: user!!.latitude
-    var minLng = valid.minOfOrNull { it.lng } ?: user!!.longitude
-    var maxLng = valid.maxOfOrNull { it.lng } ?: user!!.longitude
+    fun ptLatLng(lng: Double, lat: Double): LatLng {
+        val (mLng, mLat) = mapLngLat(lng, lat, useGcj02)
+        return LatLng(mLat, mLng)
+    }
 
-    if (user != null) {
-        minLat = minOf(minLat, user.latitude)
-        maxLat = maxOf(maxLat, user.latitude)
-        minLng = minOf(minLng, user.longitude)
-        maxLng = maxOf(maxLng, user.longitude)
+    val mapped = valid.map { ptLatLng(it.lng, it.lat) }
+    val userLl = user?.let { ptLatLng(it.longitude, it.latitude) }
+
+    var minLat = mapped.minOfOrNull { it.latitude } ?: userLl!!.latitude
+    var maxLat = mapped.maxOfOrNull { it.latitude } ?: userLl!!.latitude
+    var minLng = mapped.minOfOrNull { it.longitude } ?: userLl!!.longitude
+    var maxLng = mapped.maxOfOrNull { it.longitude } ?: userLl!!.longitude
+
+    if (userLl != null) {
+        minLat = minOf(minLat, userLl.latitude)
+        maxLat = maxOf(maxLat, userLl.latitude)
+        minLng = minOf(minLng, userLl.longitude)
+        maxLng = maxOf(maxLng, userLl.longitude)
     }
 
     history.lastOrNull()?.let { current ->
@@ -594,22 +734,18 @@ private fun fitCamera(
             current.windRadii12()?.maxKm
         ).maxOrNull() ?: 0.0
         if (maxR > 0.0) {
-            val (latPad, lngPad) = windRadiusPaddingDegrees(current.lat, maxR)
-            minLat = minOf(minLat, current.lat - latPad)
-            maxLat = maxOf(maxLat, current.lat + latPad)
-            minLng = minOf(minLng, current.lng - lngPad)
-            maxLng = maxOf(maxLng, current.lng + lngPad)
+            val center = ptLatLng(current.lng, current.lat)
+            val (latPad, lngPad) = windRadiusPaddingDegrees(center.latitude, maxR)
+            minLat = minOf(minLat, center.latitude - latPad)
+            maxLat = maxOf(maxLat, center.latitude + latPad)
+            minLng = minOf(minLng, center.longitude - lngPad)
+            maxLng = maxOf(maxLng, center.longitude + lngPad)
         }
     }
 
-    if (valid.size <= 1 && user == null && maxLat - minLat < 0.4 && maxLng - minLng < 0.4) {
-        val p = valid.firstOrNull() ?: return
-        map.moveCamera(
-            CameraUpdateFactory.newLatLngZoom(
-                LatLng(p.lat, p.lng),
-                5.5
-            )
-        )
+    if (mapped.size <= 1 && userLl == null && maxLat - minLat < 0.4 && maxLng - minLng < 0.4) {
+        val p = mapped.firstOrNull() ?: return
+        map.moveCamera(CameraUpdateFactory.newLatLngZoom(p, 5.5))
         return
     }
 
@@ -622,19 +758,27 @@ private fun fitCamera(
         val builder = LatLngBounds.Builder()
         builder.include(LatLng(midLat - latSpan / 2, midLng - lngSpan / 2))
         builder.include(LatLng(midLat + latSpan / 2, midLng + lngSpan / 2))
-        valid.forEach { builder.include(LatLng(it.lat, it.lng)) }
-        if (user != null) {
-            builder.include(LatLng(user.latitude, user.longitude))
-        }
+        mapped.forEach { builder.include(it) }
+        if (userLl != null) builder.include(userLl)
         map.moveCamera(CameraUpdateFactory.newLatLngBounds(builder.build(), 72))
     }.onFailure {
         map.moveCamera(CameraUpdateFactory.newLatLngZoom(LatLng(midLat, midLng), 4.5))
     }
 }
 
-private fun lineString(points: List<TyphoonPoint>): LineString {
+/** Map display coordinates: WGS-84 as-is, or GCJ-02 when basemap is Amap. */
+private fun mapLngLat(lng: Double, lat: Double, useGcj02: Boolean): Pair<Double, Double> {
+    if (!useGcj02) return lng to lat
+    val p = CoordTransform.wgs84ToGcj02(lng, lat)
+    return p.lng to p.lat
+}
+
+private fun lineString(points: List<TyphoonPoint>, useGcj02: Boolean = false): LineString {
     val coords = ArrayList<Point>(points.size)
-    points.forEach { coords.add(Point.fromLngLat(it.lng, it.lat)) }
+    points.forEach {
+        val (lng, lat) = mapLngLat(it.lng, it.lat, useGcj02)
+        coords.add(Point.fromLngLat(lng, lat))
+    }
     return LineString.fromLngLats(coords)
 }
 

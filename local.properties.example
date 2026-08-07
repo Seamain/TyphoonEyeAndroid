@@ -31,5 +31,24 @@ QWEATHER_API_KEY=your_qweather_api_key_here
 # QWEATHER_PRIVATE_KEY=-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----
 
 # ---------- 地图底图（可选）----------
-# 默认使用 app/src/main/assets/map_style.json（Carto Voyager 栅格，无需 Key）
+# 默认「自动」：大陆 → 高德；其它地区 → 国际（Carto/OSM）
+# 用户可在「设置 → 外观 → 地图底图」选：自动 / 高德 / 国际
+# 地图左下角会显示当前实际底图标识（高德地图 / OpenStreetMap）
 # MAPLIBRE_STYLE_URL=https://demotiles.maplibre.org/style.json
+#
+# 高德 Key（控制台 https://console.amap.com/dev/key/app ）
+# AMAP_KEY=your_amap_web_key_here
+#
+# 编译期强制覆盖（一般不用）：amap | open
+# MAP_BASEMAP=amap
+#
+# ---------- 应用内更新（GitHub Releases）----------
+# 默认仓库 Seamain/TyphoonEyeAndroid；发版 tag 如 v1.1.0 且附带 .apk
+# GITHUB_OWNER=Seamain
+# GITHUB_REPO=TyphoonEyeAndroid
+#
+# ---------- 版本号（通常无需手写）----------
+# 默认从最近的 Git tag（vX.Y.Z）写入 versionName；versionCode 用 commit 计数。
+# CI 推送 tag 时会自动注入。仅在无 git 历史或需要强制覆盖时取消注释：
+# VERSION_NAME=1.1.0
+# VERSION_CODE=12

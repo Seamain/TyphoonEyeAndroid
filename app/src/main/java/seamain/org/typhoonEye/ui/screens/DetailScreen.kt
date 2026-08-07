@@ -73,6 +73,7 @@ import seamain.org.typhoonEye.ui.components.TrackMapCard
 import seamain.org.typhoonEye.ui.theme.Motion
 import seamain.org.typhoonEye.ui.theme.TyphoonEyeTheme
 import seamain.org.typhoonEye.ui.util.currentIntensity
+import seamain.org.typhoonEye.ui.util.MapBasemap
 import seamain.org.typhoonEye.ui.util.displayLabel
 import seamain.org.typhoonEye.ui.util.formatCoordinate
 import seamain.org.typhoonEye.ui.util.formatObservationTime
@@ -92,7 +93,8 @@ fun DetailScreen(
     onShare: (String) -> Unit,
     shareText: String,
     modifier: Modifier = Modifier,
-    userLocation: UserLocation? = null
+    userLocation: UserLocation? = null,
+    mapBasemap: MapBasemap = MapBasemap.Auto
 ) {
     var tabIndex by rememberSaveable { mutableIntStateOf(0) }
     val tabs = listOf(
@@ -203,6 +205,7 @@ fun DetailScreen(
                         history = typhoon.points,
                         forecast = typhoon.forecastPoints,
                         userLocation = userLocation,
+                        mapBasemap = mapBasemap,
                         modifier = Modifier
                             .fillMaxSize()
                             .padding(horizontal = 16.dp, vertical = 12.dp)

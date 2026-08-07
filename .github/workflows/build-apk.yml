@@ -82,14 +82,27 @@ jobs:
       - name: Extract Tag or Version Info
         id: get_version
         run: |
+          # Prefer the pushed GitHub tag (vX.Y.Z). Otherwise use git describe so
+          # APK versionName matches the nearest release tag.
           if [[ "${{ github.ref }}" == refs/tags/* ]]; then
-            VERSION="${GITHUB_REF_NAME}"
+            TAG_NAME="${GITHUB_REF_NAME}"
           else
-            SHORT_SHA=$(git rev-parse --short HEAD)
-            VERSION="v1.0.0-${SHORT_SHA}"
+            TAG_NAME="$(git describe --tags --match 'v*' --dirty 2>/dev/null || true)"
+            if [[ -z "$TAG_NAME" ]]; then
+              SHORT_SHA="$(git rev-parse --short HEAD)"
+              TAG_NAME="v0.1.0-${SHORT_SHA}"
+            fi
           fi
-          echo "VERSION=$VERSION" >> $GITHUB_ENV
-          echo "tag_name=$VERSION" >> $GITHUB_OUTPUT
+          # Strip leading v for Android versionName / Gradle VERSION_NAME
+          VERSION_NAME="${TAG_NAME#v}"
+          VERSION_CODE="$(git rev-list --count HEAD)"
+
+          echo "VERSION=$TAG_NAME" >> "$GITHUB_ENV"
+          echo "VERSION_NAME=$VERSION_NAME" >> "$GITHUB_ENV"
+          echo "VERSION_CODE=$VERSION_CODE" >> "$GITHUB_ENV"
+          echo "tag_name=$TAG_NAME" >> "$GITHUB_OUTPUT"
+          echo "version_name=$VERSION_NAME" >> "$GITHUB_OUTPUT"
+          echo "Resolved version: tag=$TAG_NAME name=$VERSION_NAME code=$VERSION_CODE"
 
       - name: Build Debug APK
         if: ${{ inputs.build_type == 'debug' }}
@@ -97,6 +110,8 @@ jobs:
           JUHE_KEY: ${{ secrets.JUHE_KEY }}
           JUHE_API_KEY: ${{ secrets.JUHE_API_KEY }}
           JUHEKEY: ${{ secrets.JUHEKEY }}
+          VERSION_NAME: ${{ env.VERSION_NAME }}
+          VERSION_CODE: ${{ env.VERSION_CODE }}
         run: ./gradlew assembleDebug --stacktrace
 
       - name: Build Release APK
@@ -105,6 +120,8 @@ jobs:
           JUHE_KEY: ${{ secrets.JUHE_KEY }}
           JUHE_API_KEY: ${{ secrets.JUHE_API_KEY }}
           JUHEKEY: ${{ secrets.JUHEKEY }}
+          VERSION_NAME: ${{ env.VERSION_NAME }}
+          VERSION_CODE: ${{ env.VERSION_CODE }}
         run: ./gradlew assembleRelease --stacktrace
 
       - name: Process & Rename APK Artifacts

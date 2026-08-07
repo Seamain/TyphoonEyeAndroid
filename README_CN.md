@@ -28,7 +28,7 @@
 应用严格遵循 **Clean Architecture** 架构理念与 **MVVM** 模式，结合官方 Jetpack 组件进行标准化开发。
 
 - **界面与导航**：[Jetpack Compose](https://developer.android.com/jetpack/compose)、[Material 3](https://m3.material.io/)、Navigation Compose
-- **地图引擎**：[MapLibre Android SDK](https://github.com/maplibre/maplibre-native)（矢量地图渲染）
+- **地图引擎**：[MapLibre Android SDK](https://github.com/maplibre/maplibre-native)；默认 [高德地图](https://lbs.amap.com/api) 栅格底图（GCJ-02），可在设置中切换国际 Carto/OSM（WGS-84）
 - **依赖注入**：[Hilt](https://dagger.dev/hilt/) (Dagger)
 - **并发与响应式**：Kotlin 协程 (Coroutines)、StateFlow、SharedFlow
 - **网络层**：[Retrofit 2](https://square.github.io/retrofit/)、[OkHttp 4](https://square.github.io/okhttp/)、Ed25519 密码学 JWT 身份认证
@@ -54,14 +54,27 @@
    cd TyphoonEyeAndroid
    ```
 
-2. (可选) 配置和风天气 API Key：
-   复制 `local.properties.example` 为 `local.properties` 并填写 API 密钥：
+2. (可选) 配置 API Key：
+   复制 `local.properties.example` 为 `local.properties` 并填写密钥：
    ```properties
    QWEATHER_API_KEY=your_qweather_api_key
    QWEATHER_KID=your_key_id
    QWEATHER_PROJECT_ID=your_project_id
    QWEATHER_PRIVATE_KEY=your_private_key
+   # 高德开放平台 Key（中国大陆底图，https://console.amap.com/dev/key/app ）
+   AMAP_KEY=your_amap_web_key
+   # 底图强制：auto | amap | open
+   # MAP_BASEMAP=auto
+   # 应用内更新默认读取 GitHub Releases（Seamain/TyphoonEyeAndroid）
    ```
+
+### 应用内更新
+
+应用启动时会静默检查 GitHub Releases（每天最多一次）；在 **设置 → 关于 → 检查更新** 可手动检查。  
+发现新版本后可下载 APK 并调起系统安装器（需授予「安装未知应用」权限）。  
+
+**版本号写入规则：** `versionName` 取自最近的 GitHub Tag（如 `v1.1.0` → `1.1.0`），`versionCode` 为 commit 计数；CI 推送 `v*` 标签构建时会自动注入。发版请推送 `vX.Y.Z` 并附带 `.apk`（GitHub Actions 已支持）。
+
    *(注：未配置密钥时，应用将自动运行在 Demo / 演示模式)*
 
 3. 编译并安装：

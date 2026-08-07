@@ -11,6 +11,7 @@ import okhttp3.OkHttpClient
 import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.Retrofit
 import seamain.org.typhoonEye.BuildConfig
+import seamain.org.typhoonEye.data.api.GitHubReleaseApi
 import seamain.org.typhoonEye.data.api.JuheTyphoonApi
 import seamain.org.typhoonEye.data.api.QWeatherAuthInterceptor
 import seamain.org.typhoonEye.data.api.QWeatherTyphoonApi
@@ -65,6 +66,30 @@ object NetworkModule {
     fun provideJuheOkHttp(
         @Named("logging") logging: HttpLoggingInterceptor
     ): OkHttpClient = baseOkHttpBuilder()
+        .addInterceptor(logging)
+        .build()
+
+    /** Shared client for GitHub API + APK download (longer timeouts). */
+    @Provides
+    @Singleton
+    @Named("github")
+    fun provideGitHubOkHttp(
+        @Named("logging") logging: HttpLoggingInterceptor
+    ): OkHttpClient = OkHttpClient.Builder()
+        .connectTimeout(20, TimeUnit.SECONDS)
+        .readTimeout(120, TimeUnit.SECONDS)
+        .writeTimeout(60, TimeUnit.SECONDS)
+        .callTimeout(0, TimeUnit.SECONDS)
+        .followRedirects(true)
+        .followSslRedirects(true)
+        .addInterceptor { chain ->
+            val req = chain.request().newBuilder()
+                .header("User-Agent", "TyphoonEye/${BuildConfig.VERSION_NAME}")
+                .header("Accept", "application/vnd.github+json")
+                .header("X-GitHub-Api-Version", "2022-11-28")
+                .build()
+            chain.proceed(req)
+        }
         .addInterceptor(logging)
         .build()
 
@@ -133,4 +158,24 @@ object NetworkModule {
     @Singleton
     fun provideQWeatherWarningApi(@Named("qweather") retrofit: Retrofit): QWeatherWarningApi =
         retrofit.create(QWeatherWarningApi::class.java)
+
+    @Provides
+    @Singleton
+    @Named("github")
+    fun provideGitHubRetrofit(
+        @Named("github") client: OkHttpClient,
+        json: Json
+    ): Retrofit {
+        val mediaType = "application/json".toMediaType()
+        return Retrofit.Builder()
+            .baseUrl("https://api.github.com/")
+            .client(client)
+            .addConverterFactory(json.asConverterFactory(mediaType))
+            .build()
+    }
+
+    @Provides
+    @Singleton
+    fun provideGitHubReleaseApi(@Named("github") retrofit: Retrofit): GitHubReleaseApi =
+        retrofit.create(GitHubReleaseApi::class.java)
 }

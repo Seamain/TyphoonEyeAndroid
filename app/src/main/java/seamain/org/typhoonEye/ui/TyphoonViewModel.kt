@@ -20,6 +20,9 @@ import seamain.org.typhoonEye.data.preferences.AppLanguage
 import seamain.org.typhoonEye.data.preferences.ThemeMode
 import seamain.org.typhoonEye.data.preferences.UserPreferencesRepository
 import seamain.org.typhoonEye.data.preferences.UserSettings
+import seamain.org.typhoonEye.data.update.AppUpdateRepository
+import seamain.org.typhoonEye.domain.model.AppUpdateInfo
+import seamain.org.typhoonEye.domain.model.AppUpdateState
 import seamain.org.typhoonEye.domain.model.Typhoon
 import seamain.org.typhoonEye.domain.model.TyphoonPoint
 import seamain.org.typhoonEye.domain.model.UserLocation
@@ -32,6 +35,7 @@ import seamain.org.typhoonEye.live.TyphoonAlertNotifier
 import seamain.org.typhoonEye.live.TyphoonLiveNotifier
 import seamain.org.typhoonEye.live.TyphoonLiveUpdateWorker
 import seamain.org.typhoonEye.ui.util.IntensityLevel
+import seamain.org.typhoonEye.ui.util.MapBasemap
 import seamain.org.typhoonEye.ui.util.currentIntensity
 import seamain.org.typhoonEye.ui.util.formatObservationTime
 import java.text.SimpleDateFormat
@@ -59,7 +63,8 @@ class TyphoonViewModel @Inject constructor(
     private val preferences: UserPreferencesRepository,
     private val locationProvider: LocationProvider,
     private val liveNotifier: TyphoonLiveNotifier,
-    private val alertNotifier: TyphoonAlertNotifier
+    private val alertNotifier: TyphoonAlertNotifier,
+    private val appUpdateRepository: AppUpdateRepository
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow<TyphoonUiState>(TyphoonUiState.Loading)
@@ -105,6 +110,8 @@ class TyphoonViewModel @Inject constructor(
     val settings: StateFlow<UserSettings> = preferences.settings
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), UserSettings())
 
+    val appUpdateState: StateFlow<AppUpdateState> = appUpdateRepository.state
+
     /** Latest device fix (live) or DataStore cache — used for distance UI + map. */
     private val _liveUserLocation = MutableStateFlow<UserLocation?>(null)
     val userLocation: StateFlow<UserLocation?> = combine(
@@ -131,6 +138,10 @@ class TyphoonViewModel @Inject constructor(
 
     init {
         refresh()
+        // Quiet daily GitHub Releases check (no dialog spam if already up to date).
+        viewModelScope.launch {
+            runCatching { appUpdateRepository.checkForUpdate(force = false) }
+        }
         viewModelScope.launch {
             combine(_allTyphoons, preferences.settings) { typhoons, prefs ->
                 typhoons to prefs
@@ -163,6 +174,30 @@ class TyphoonViewModel @Inject constructor(
     fun setAppLanguage(language: AppLanguage) {
         viewModelScope.launch { preferences.setAppLanguage(language) }
     }
+
+    fun setMapBasemap(basemap: MapBasemap) {
+        viewModelScope.launch { preferences.setMapBasemap(basemap) }
+    }
+
+    fun checkForAppUpdate(force: Boolean = true) {
+        viewModelScope.launch { appUpdateRepository.checkForUpdate(force = force) }
+    }
+
+    fun downloadAppUpdate(info: AppUpdateInfo) {
+        viewModelScope.launch { appUpdateRepository.downloadUpdate(info) }
+    }
+
+    fun dismissAppUpdate() {
+        appUpdateRepository.dismiss()
+    }
+
+    fun canInstallAppPackages(): Boolean = appUpdateRepository.canInstallPackages()
+
+    fun appInstallPermissionIntent() = appUpdateRepository.installPermissionSettingsIntent()
+
+    fun appInstallApkIntent(path: String) = appUpdateRepository.installApk(path)
+
+    fun appReleasePageIntent(info: AppUpdateInfo) = appUpdateRepository.openReleasePage(info)
 
     fun setLiveActivityEnabled(enabled: Boolean) {
         viewModelScope.launch {

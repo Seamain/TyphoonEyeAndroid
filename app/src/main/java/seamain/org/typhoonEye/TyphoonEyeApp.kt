@@ -29,13 +29,21 @@ class TyphoonEyeApp : Application(), Configuration.Provider {
 
     override fun onCreate() {
         super.onCreate()
-        // AppCompat already restores locales via localeConfig / auto_store_locales.
-        // Only re-sync DataStore → AppCompat when they diverge — never block startup.
+        // AppCompat restores locales via localeConfig / auto_store_locales.
+        // Re-sync DataStore → AppCompat when they diverge (incl. System = empty list).
         applicationScope.launch {
             runCatching {
                 val stored = preferences.settings.first().appLanguage
-                val currentTags = AppCompatDelegate.getApplicationLocales().toLanguageTags()
-                if (currentTags.isBlank() || AppLanguage.fromLocaleTags(currentTags) != stored) {
+                val appLocales = AppCompatDelegate.getApplicationLocales()
+                val followingSystem = appLocales.isEmpty
+                val needsApply = when (stored) {
+                    AppLanguage.System -> !followingSystem
+                    else -> {
+                        val current = AppLanguage.fromLocaleTags(appLocales.toLanguageTags())
+                        current != stored
+                    }
+                }
+                if (needsApply) {
                     AppLanguage.apply(stored)
                 }
             }

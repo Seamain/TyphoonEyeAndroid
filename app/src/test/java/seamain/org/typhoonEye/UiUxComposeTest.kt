@@ -254,6 +254,7 @@ class UiUxComposeTest {
                         onEmergencyAlertsChange = {},
                         onLocationAlertsChange = {},
                         onDynamicColorChange = {},
+                        onMapBasemapChange = {},
                         onRequestNotificationPermission = {},
                         onRequestLocationPermission = {},
                         modifier = Modifier.fillMaxSize()

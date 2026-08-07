@@ -76,7 +76,7 @@ TyphoonEye is engineered adhering to **Clean Architecture** and **MVVM** princip
 Automated builds are configured via **GitHub Actions** (`.github/workflows/build-apk.yml`).
 
 - **Artifacts**: Every push to `main` generates a downloadable Debug APK.
-- **Releases**: Creating a Git tag (e.g. `v1.0.0`) automatically compiles a Release APK, extracts the latest Git Changelog, and publishes it to [GitHub Releases](https://github.com/Seamain/TyphoonEyeAndroid/releases).
+- **Releases**: Creating a Git tag (e.g. `v1.0.0`) automatically compiles a Release APK, writes that tag into `versionName` (and commit count into `versionCode`), extracts the latest Git Changelog, and publishes it to [GitHub Releases](https://github.com/Seamain/TyphoonEyeAndroid/releases).
 
 ---
 

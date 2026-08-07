@@ -7,8 +7,14 @@ import java.util.Locale
 /**
  * In-app languages. [nativeLabel] stays in the language's own script
  * so users can always recognize the option in Settings.
+ *
+ * [System] clears the per-app locale override so UI **and launcher label**
+ * follow the device language (Android resource resolution).
  */
 enum class AppLanguage(val tag: String, val nativeLabel: String) {
+    /** Follow device / system language (default). */
+    System("", "System"),
+
     ZhHans("zh-CN", "中文简体"),
     ZhHant("zh-TW", "中文繁體"),
     Yue("yue", "粵語"),
@@ -16,9 +22,15 @@ enum class AppLanguage(val tag: String, val nativeLabel: String) {
 
     companion object {
         fun fromStorage(value: String?): AppLanguage =
-            entries.find { it.name == value || it.tag.equals(value, ignoreCase = true) }
-                ?: fromLocaleTags(value)
-                ?: ZhHans
+            when {
+                value.isNullOrBlank() -> System
+                value.equals("System", ignoreCase = true) ||
+                    value.equals("auto", ignoreCase = true) ||
+                    value.equals("default", ignoreCase = true) -> System
+                else -> entries.find {
+                    it != System && (it.name.equals(value, ignoreCase = true) || it.tag.equals(value, ignoreCase = true))
+                } ?: fromLocaleTags(value) ?: System
+            }
 
         fun fromLocaleTags(tags: String?): AppLanguage? {
             if (tags.isNullOrBlank()) return null
@@ -36,10 +48,16 @@ enum class AppLanguage(val tag: String, val nativeLabel: String) {
                 locale.language.equals("zh", ignoreCase = true) &&
                     locale.country.equals("HK", ignoreCase = true) -> Yue
                 locale.language.equals("zh", ignoreCase = true) -> ZhHans
-                else -> entries.find { primary.startsWith(it.tag, ignoreCase = true) }
+                else -> entries.find {
+                    it != System && primary.startsWith(it.tag, ignoreCase = true)
+                }
             }
         }
 
+        /**
+         * Effective UI language for logic that needs a concrete locale
+         * (basemap region, formatting). Resolves [System] to the device language.
+         */
         fun current(): AppLanguage {
             val appLocales = AppCompatDelegate.getApplicationLocales()
             if (!appLocales.isEmpty) {
@@ -54,9 +72,13 @@ enum class AppLanguage(val tag: String, val nativeLabel: String) {
         }
 
         fun apply(language: AppLanguage) {
-            AppCompatDelegate.setApplicationLocales(
+            val locales = if (language == System || language.tag.isBlank()) {
+                // Empty list = follow system (launcher label + resources).
+                LocaleListCompat.getEmptyLocaleList()
+            } else {
                 LocaleListCompat.forLanguageTags(language.tag)
-            )
+            }
+            AppCompatDelegate.setApplicationLocales(locales)
         }
     }
 }

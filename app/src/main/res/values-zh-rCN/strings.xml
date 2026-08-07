@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Explicit zh-CN so launcher / system language Chinese (China) resolves cleanly. -->
+<resources>
+    <string name="app_name">台风眼</string>
+    <string name="app_tagline">西北太平洋台风实时监测</string>
+</resources>

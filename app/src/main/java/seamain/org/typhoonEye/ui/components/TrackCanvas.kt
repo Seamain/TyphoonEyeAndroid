@@ -35,6 +35,7 @@ import androidx.compose.ui.unit.dp
 import seamain.org.typhoonEye.R
 import seamain.org.typhoonEye.domain.model.TyphoonPoint
 import seamain.org.typhoonEye.domain.model.UserLocation
+import seamain.org.typhoonEye.ui.util.MapBasemap
 import seamain.org.typhoonEye.ui.util.WindRadiiKm
 import seamain.org.typhoonEye.ui.util.intensityColor
 import seamain.org.typhoonEye.ui.util.resolveIntensity
@@ -52,7 +53,8 @@ fun TrackMapCard(
     history: List<TyphoonPoint>,
     forecast: List<TyphoonPoint>,
     modifier: Modifier = Modifier,
-    userLocation: UserLocation? = null
+    userLocation: UserLocation? = null,
+    mapBasemap: MapBasemap = MapBasemap.Auto
 ) {
     val historyColor = MaterialTheme.colorScheme.primary
     val forecastColor = MaterialTheme.colorScheme.tertiary
@@ -110,6 +112,7 @@ fun TrackMapCard(
                         historyColor = historyColor,
                         forecastColor = forecastColor,
                         userLocation = userLocation,
+                        preferredBasemap = mapBasemap,
                         modifier = Modifier.fillMaxSize()
                     )
                 }

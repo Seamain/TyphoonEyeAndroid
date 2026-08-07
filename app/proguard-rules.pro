@@ -17,6 +17,10 @@
 -keepclassmembers class seamain.org.typhoonEye.data.model.** {
     *** Companion;
 }
+-keep,includedescriptorclasses class seamain.org.typhoonEye.data.api.**$$serializer { *; }
+-keepclassmembers class seamain.org.typhoonEye.data.api.** {
+    *** Companion;
+}
 
 # Retrofit / OkHttp
 -dontwarn okhttp3.**

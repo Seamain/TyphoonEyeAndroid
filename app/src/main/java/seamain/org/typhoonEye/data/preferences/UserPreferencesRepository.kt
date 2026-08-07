@@ -16,6 +16,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
 import seamain.org.typhoonEye.domain.model.UserLocation
+import seamain.org.typhoonEye.ui.util.MapBasemap
 
 private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "settings")
 
@@ -32,12 +33,14 @@ enum class ThemeMode {
 
 data class UserSettings(
     val themeMode: ThemeMode = ThemeMode.System,
-    val appLanguage: AppLanguage = AppLanguage.ZhHans,
+    val appLanguage: AppLanguage = AppLanguage.System,
     val liveActivityEnabled: Boolean = true,
     val emergencyAlertsEnabled: Boolean = true,
     /** Prefer device GPS for official warning lookups. */
     val locationAlertsEnabled: Boolean = true,
     val dynamicColorEnabled: Boolean = true,
+    /** Track map basemap; default auto (CN → 高德, else international). */
+    val mapBasemap: MapBasemap = MapBasemap.Auto,
     /** Last successful fix used by background Worker when fresh GPS is unavailable. */
     val cachedUserLocation: UserLocation? = null
 )
@@ -48,11 +51,12 @@ class UserPreferencesRepository(private val context: Context) {
         UserSettings(
             themeMode = ThemeMode.fromStorage(prefs[Keys.THEME_MODE]),
             appLanguage = prefs[Keys.APP_LANGUAGE]?.let(AppLanguage::fromStorage)
-                ?: AppLanguage.current(),
+                ?: AppLanguage.System,
             liveActivityEnabled = prefs[Keys.LIVE_ACTIVITY] ?: true,
             emergencyAlertsEnabled = prefs[Keys.EMERGENCY_ALERTS] ?: true,
             locationAlertsEnabled = prefs[Keys.LOCATION_ALERTS] ?: true,
             dynamicColorEnabled = prefs[Keys.DYNAMIC_COLOR] ?: true,
+            mapBasemap = MapBasemap.fromStorage(prefs[Keys.MAP_BASEMAP]),
             cachedUserLocation = prefs.toCachedLocation()
         )
     }
@@ -85,6 +89,10 @@ class UserPreferencesRepository(private val context: Context) {
         context.dataStore.edit { it[Keys.DYNAMIC_COLOR] = enabled }
     }
 
+    suspend fun setMapBasemap(basemap: MapBasemap) {
+        context.dataStore.edit { it[Keys.MAP_BASEMAP] = basemap.name }
+    }
+
     suspend fun cacheUserLocation(location: UserLocation) {
         if (!location.isValid) return
         context.dataStore.edit { prefs ->
@@ -103,6 +111,19 @@ class UserPreferencesRepository(private val context: Context) {
 
     suspend fun setNotifiedAlertIds(ids: Set<String>) {
         context.dataStore.edit { it[Keys.NOTIFIED_ALERTS] = ids }
+    }
+
+    /** Throttle automatic update checks to once per 24h. */
+    suspend fun shouldAutoCheckUpdate(
+        nowMs: Long = System.currentTimeMillis(),
+        intervalMs: Long = 24L * 60L * 60L * 1000L
+    ): Boolean {
+        val last = context.dataStore.data.map { it[Keys.LAST_UPDATE_CHECK_AT] ?: 0L }.first()
+        return nowMs - last >= intervalMs
+    }
+
+    suspend fun markUpdateChecked(nowMs: Long = System.currentTimeMillis()) {
+        context.dataStore.edit { it[Keys.LAST_UPDATE_CHECK_AT] = nowMs }
     }
 
     private fun Preferences.toCachedLocation(): UserLocation? {
@@ -124,10 +145,12 @@ class UserPreferencesRepository(private val context: Context) {
         val EMERGENCY_ALERTS = booleanPreferencesKey("emergency_alerts_enabled")
         val LOCATION_ALERTS = booleanPreferencesKey("location_alerts_enabled")
         val DYNAMIC_COLOR = booleanPreferencesKey("dynamic_color_enabled")
+        val MAP_BASEMAP = stringPreferencesKey("map_basemap")
         val NOTIFIED_ALERTS = stringSetPreferencesKey("notified_alert_ids")
         val CACHED_LAT = doublePreferencesKey("cached_user_lat")
         val CACHED_LNG = doublePreferencesKey("cached_user_lng")
         val CACHED_LOC_AT = longPreferencesKey("cached_user_loc_at")
         val CACHED_LOC_LABEL = stringPreferencesKey("cached_user_loc_label")
+        val LAST_UPDATE_CHECK_AT = longPreferencesKey("last_update_check_at")
     }
 }

@@ -23,11 +23,15 @@ import androidx.compose.material.icons.outlined.Code
 import androidx.compose.material.icons.outlined.DarkMode
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Language
+import androidx.compose.material.icons.outlined.Map
 import androidx.compose.material.icons.outlined.MyLocation
 import androidx.compose.material.icons.outlined.NotificationsActive
 import androidx.compose.material.icons.outlined.NotificationImportant
 import androidx.compose.material.icons.outlined.Palette
+import androidx.compose.material.icons.outlined.Public
+import androidx.compose.material.icons.outlined.SystemUpdate
 import androidx.compose.material.icons.outlined.WbSunny
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.HorizontalDivider
@@ -62,6 +66,7 @@ import seamain.org.typhoonEye.R
 import seamain.org.typhoonEye.data.preferences.AppLanguage
 import seamain.org.typhoonEye.data.preferences.ThemeMode
 import seamain.org.typhoonEye.data.preferences.UserSettings
+import seamain.org.typhoonEye.ui.util.MapBasemap
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -76,9 +81,12 @@ fun SettingsScreen(
     onEmergencyAlertsChange: (Boolean) -> Unit,
     onLocationAlertsChange: (Boolean) -> Unit,
     onDynamicColorChange: (Boolean) -> Unit,
+    onMapBasemapChange: (MapBasemap) -> Unit,
     onRequestNotificationPermission: () -> Unit,
     onRequestLocationPermission: () -> Unit,
     onOpenLicenses: () -> Unit = {},
+    onCheckForUpdates: () -> Unit = {},
+    isCheckingUpdates: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -148,6 +156,10 @@ fun SettingsScreen(
                         .padding(bottom = 8.dp)
                 ) {
                     AppLanguage.entries.forEachIndexed { index, language ->
+                        val languageLabel = when (language) {
+                            AppLanguage.System -> stringResource(R.string.language_system)
+                            else -> language.nativeLabel
+                        }
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -160,7 +172,7 @@ fun SettingsScreen(
                                 .semantics {
                                     contentDescription = context.getString(
                                         R.string.cd_language_option,
-                                        language.nativeLabel
+                                        languageLabel
                                     )
                                 },
                             verticalAlignment = Alignment.CenterVertically
@@ -170,16 +182,13 @@ fun SettingsScreen(
                                 onClick = null
                             )
                             Text(
-                                text = language.nativeLabel,
+                                text = languageLabel,
                                 style = MaterialTheme.typography.bodyLarge,
                                 modifier = Modifier.padding(start = 12.dp)
                             )
                         }
                         if (index < AppLanguage.entries.lastIndex) {
-                            HorizontalDivider(
-                                modifier = Modifier.padding(start = 56.dp, end = 16.dp),
-                                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f)
-                            )
+                            SettingsDivider()
                         }
                     }
                 }
@@ -241,10 +250,7 @@ fun SettingsScreen(
                     enabled = settings.emergencyAlertsEnabled
                 )
                 if (needsNotificationPermission || needsLocationPermission) {
-                    HorizontalDivider(
-                        modifier = Modifier.padding(horizontal = 16.dp),
-                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
-                    )
+                    SettingsDivider()
                 }
                 if (needsNotificationPermission) {
                     FilledTonalButton(
@@ -351,6 +357,72 @@ fun SettingsScreen(
                         }
                     }
                 }
+                SettingsDivider()
+                Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.Map,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(24.dp)
+                        )
+                        Column {
+                            Text(
+                                stringResource(R.string.map_basemap_title),
+                                style = MaterialTheme.typography.bodyLarge
+                            )
+                            Text(
+                                text = stringResource(R.string.map_basemap_subtitle),
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(12.dp))
+                    SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+                        MapBasemap.entries.forEachIndexed { index, basemap ->
+                            val label = when (basemap) {
+                                MapBasemap.Auto -> stringResource(R.string.map_basemap_auto)
+                                MapBasemap.Amap -> stringResource(R.string.map_basemap_amap)
+                                MapBasemap.OpenStreet -> stringResource(R.string.map_basemap_open)
+                            }
+                            val icon = when (basemap) {
+                                MapBasemap.Auto -> Icons.Outlined.Language
+                                MapBasemap.Amap -> Icons.Outlined.Map
+                                MapBasemap.OpenStreet -> Icons.Outlined.Public
+                            }
+                            SegmentedButton(
+                                selected = settings.mapBasemap == basemap,
+                                onClick = { onMapBasemapChange(basemap) },
+                                shape = SegmentedButtonDefaults.itemShape(
+                                    index = index,
+                                    count = MapBasemap.entries.size
+                                ),
+                                icon = {
+                                    SegmentedButtonDefaults.Icon(
+                                        active = settings.mapBasemap == basemap
+                                    ) {
+                                        Icon(
+                                            imageVector = icon,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                    }
+                                },
+                                label = { Text(label) },
+                                modifier = Modifier.semantics {
+                                    contentDescription = context.getString(
+                                        R.string.cd_map_basemap_option,
+                                        label
+                                    )
+                                }
+                            )
+                        }
+                    }
+                }
             }
 
             SettingsSection(title = stringResource(R.string.section_about)) {
@@ -373,10 +445,47 @@ fun SettingsScreen(
                     },
                     colors = ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.surface)
                 )
-                HorizontalDivider(
-                    modifier = Modifier.padding(start = 56.dp, end = 16.dp),
-                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f)
+                SettingsDivider()
+                ListItem(
+                    headlineContent = { Text(stringResource(R.string.check_for_updates)) },
+                    supportingContent = {
+                        Text(
+                            if (isCheckingUpdates) {
+                                stringResource(R.string.update_checking)
+                            } else {
+                                stringResource(R.string.check_for_updates_subtitle)
+                            }
+                        )
+                    },
+                    leadingContent = {
+                        Icon(
+                            Icons.Outlined.SystemUpdate,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    },
+                    trailingContent = {
+                        if (isCheckingUpdates) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(22.dp),
+                                strokeWidth = 2.dp
+                            )
+                        } else {
+                            Icon(
+                                Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    },
+                    colors = ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.surface),
+                    modifier = Modifier
+                        .clickable(enabled = !isCheckingUpdates, onClick = onCheckForUpdates)
+                        .semantics {
+                            contentDescription = context.getString(R.string.cd_check_for_updates)
+                        }
                 )
+                SettingsDivider()
                 ListItem(
                     headlineContent = { Text(stringResource(R.string.open_source_licenses)) },
                     supportingContent = { Text(stringResource(R.string.open_source_licenses_subtitle)) },
@@ -469,10 +578,15 @@ private fun SettingsSwitchRow(
             colors = ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.surface)
         )
         if (showDivider) {
-            HorizontalDivider(
-                modifier = Modifier.padding(start = 72.dp, end = 16.dp),
-                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f)
-            )
+            SettingsDivider()
         }
     }
+}
+
+@Composable
+private fun SettingsDivider() {
+    HorizontalDivider(
+        modifier = Modifier.padding(start = 56.dp, end = 16.dp),
+        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f)
+    )
 }

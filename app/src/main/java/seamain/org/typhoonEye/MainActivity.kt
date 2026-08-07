@@ -58,7 +58,9 @@ import seamain.org.typhoonEye.domain.model.Typhoon
 import seamain.org.typhoonEye.domain.util.typhoonIdsMatch
 import seamain.org.typhoonEye.live.TyphoonLiveNotifier
 import seamain.org.typhoonEye.live.TyphoonLiveUpdateWorker
+import seamain.org.typhoonEye.domain.model.AppUpdateState
 import seamain.org.typhoonEye.ui.TyphoonViewModel
+import seamain.org.typhoonEye.ui.components.AppUpdateHost
 import seamain.org.typhoonEye.ui.navigation.AppDestination
 import seamain.org.typhoonEye.ui.screens.DetailScreen
 import seamain.org.typhoonEye.ui.screens.HomeScreen
@@ -152,6 +154,7 @@ fun TyphoonApp(
     val dataMode by viewModel.dataMode.collectAsStateWithLifecycle()
     val settings by viewModel.settings.collectAsStateWithLifecycle()
     val userLocation by viewModel.userLocation.collectAsStateWithLifecycle()
+    val appUpdateState by viewModel.appUpdateState.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val navController = rememberNavController()
 
@@ -163,6 +166,11 @@ fun TyphoonApp(
     }
     var askedNotificationPermission by rememberSaveable { mutableStateOf(false) }
     var askedLocationPermission by rememberSaveable { mutableStateOf(false) }
+    // Manual check from Settings shows up-to-date / error dialogs; silent auto-check does not.
+    var updateStatusDialogs by rememberSaveable { mutableStateOf(false) }
+
+    // After location dialog finishes, optionally continue to notification permission.
+    var pendingNotificationAfterLocation by rememberSaveable { mutableStateOf(false) }
 
     val notificationPermissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -171,15 +179,6 @@ fun TyphoonApp(
         if (granted) {
             viewModel.refreshLiveActivity()
             TyphoonLiveUpdateWorker.schedule(context.applicationContext)
-        }
-    }
-
-    val locationPermissionLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.RequestMultiplePermissions()
-    ) { result ->
-        locationGranted = result.values.any { it } || viewModel.hasLocationPermission()
-        if (locationGranted) {
-            viewModel.refreshUserLocation(force = true)
         }
     }
 
@@ -203,12 +202,30 @@ fun TyphoonApp(
         }
     }
 
-    fun requestLocationPermission() {
+    val locationPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) { result ->
+        locationGranted = result.values.any { it } || viewModel.hasLocationPermission()
+        if (locationGranted) {
+            viewModel.refreshUserLocation(force = true)
+        }
+        // Chain: never show two system permission dialogs at once.
+        if (pendingNotificationAfterLocation) {
+            pendingNotificationAfterLocation = false
+            requestNotificationPermission()
+        }
+    }
+
+    fun requestLocationPermission(thenRequestNotification: Boolean = false) {
         if (viewModel.hasLocationPermission()) {
             locationGranted = true
             viewModel.refreshUserLocation(force = true)
+            if (thenRequestNotification) {
+                requestNotificationPermission()
+            }
             return
         }
+        pendingNotificationAfterLocation = thenRequestNotification
         locationPermissionLauncher.launch(LOCATION_PERMISSIONS)
     }
 
@@ -234,8 +251,8 @@ fun TyphoonApp(
         }
     }
 
-    // Cold start: sync permission state, then request missing ones once
-    // (notification for Live/alerts, location for distance + local warnings).
+    // Cold start: always request location first (distance / map / local alerts),
+    // then notification if needed. Never launch two system dialogs at once.
     LaunchedEffect(Unit) {
         notificationsGranted = viewModel.canPostLiveNotifications()
         locationGranted = viewModel.hasLocationPermission()
@@ -243,19 +260,26 @@ fun TyphoonApp(
         val needNotification =
             (settings.liveActivityEnabled || settings.emergencyAlertsEnabled) &&
                 !notificationsGranted
-        if (needNotification && !askedNotificationPermission) {
-            askedNotificationPermission = true
-            requestNotificationPermission()
-        } else if (notificationsGranted) {
-            viewModel.refreshLiveActivity()
-            TyphoonLiveUpdateWorker.schedule(context.applicationContext)
-        }
 
-        if (locationGranted) {
-            viewModel.refreshUserLocation(force = true)
-        } else if (!askedLocationPermission) {
+        if (!locationGranted && !askedLocationPermission) {
             askedLocationPermission = true
-            requestLocationPermission()
+            if (needNotification && !askedNotificationPermission) {
+                askedNotificationPermission = true
+                requestLocationPermission(thenRequestNotification = true)
+            } else {
+                requestLocationPermission(thenRequestNotification = false)
+            }
+        } else {
+            if (locationGranted) {
+                viewModel.refreshUserLocation(force = true)
+            }
+            if (needNotification && !askedNotificationPermission) {
+                askedNotificationPermission = true
+                requestNotificationPermission()
+            } else if (notificationsGranted) {
+                viewModel.refreshLiveActivity()
+                TyphoonLiveUpdateWorker.schedule(context.applicationContext)
+            }
         }
     }
 
@@ -273,17 +297,39 @@ fun TyphoonApp(
         }
     }
 
-    // If user later enables location alerts without permission, ask again once.
+    // If location permission was revoked while app is open, or user enables alerts.
     LaunchedEffect(settings.locationAlertsEnabled) {
-        if (!settings.locationAlertsEnabled) return@LaunchedEffect
         locationGranted = viewModel.hasLocationPermission()
         if (locationGranted) {
             viewModel.refreshUserLocation(force = true)
-        } else if (!askedLocationPermission) {
+            return@LaunchedEffect
+        }
+        // Cold-start handles the first ask; only re-ask when user toggles location alerts on.
+        if (settings.locationAlertsEnabled && !askedLocationPermission) {
             askedLocationPermission = true
-            requestLocationPermission()
+            requestLocationPermission(thenRequestNotification = false)
         }
     }
+
+    AppUpdateHost(
+        state = appUpdateState,
+        showStatusDialogs = updateStatusDialogs,
+        canInstall = viewModel.canInstallAppPackages(),
+        onDismiss = {
+            viewModel.dismissAppUpdate()
+            updateStatusDialogs = false
+        },
+        onDownload = viewModel::downloadAppUpdate,
+        onInstall = { path ->
+            runCatching { context.startActivity(viewModel.appInstallApkIntent(path)) }
+        },
+        onOpenPermissionSettings = {
+            runCatching { context.startActivity(viewModel.appInstallPermissionIntent()) }
+        },
+        onOpenReleasePage = { info ->
+            runCatching { context.startActivity(viewModel.appReleasePageIntent(info)) }
+        }
+    )
 
     NavHost(
         navController = navController,
@@ -360,13 +406,19 @@ fun TyphoonApp(
                     if (enabled) requestLocationPermission()
                 },
                 onDynamicColorChange = viewModel::setDynamicColorEnabled,
+                onMapBasemapChange = viewModel::setMapBasemap,
                 onRequestNotificationPermission = ::requestNotificationPermission,
                 onRequestLocationPermission = ::requestLocationPermission,
                 onOpenLicenses = {
                     navController.navigate(AppDestination.Licenses) {
                         launchSingleTop = true
                     }
-                }
+                },
+                onCheckForUpdates = {
+                    updateStatusDialogs = true
+                    viewModel.checkForAppUpdate(force = true)
+                },
+                isCheckingUpdates = appUpdateState is AppUpdateState.Checking
             )
         }
 
@@ -411,6 +463,7 @@ fun TyphoonApp(
                         onBack = ::leaveDetail,
                         shareText = viewModel.shareSummary(typhoon),
                         userLocation = userLocation,
+                        mapBasemap = settings.mapBasemap,
                         onShare = { text ->
                             val intent = Intent(Intent.ACTION_SEND).apply {
                                 type = "text/plain"

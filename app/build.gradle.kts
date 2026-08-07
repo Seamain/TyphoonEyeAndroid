@@ -31,6 +31,70 @@ fun prop(name: String, vararg aliases: String): String {
     return value.asBuildConfigLiteral()
 }
 
+/** Run a git command from the repo root; null on failure / empty output. */
+fun runGit(vararg args: String): String? =
+    try {
+        val process = ProcessBuilder("git", *args)
+            .directory(rootProject.projectDir)
+            .redirectErrorStream(true)
+            .start()
+        val output = process.inputStream.bufferedReader().use { it.readText() }.trim()
+        if (process.waitFor() == 0 && output.isNotBlank()) output else null
+    } catch (_: Exception) {
+        null
+    }
+
+fun stripVersionPrefix(raw: String): String =
+    raw.trim().removePrefix("v").removePrefix("V").trim()
+
+/**
+ * versionName resolution (first hit wins):
+ * 1. VERSION_NAME env / local.properties (CI tag injection)
+ * 2. Nearest GitHub-style tag via `git describe --match v*`
+ * 3. Fallback for fresh checkouts without tags
+ *
+ * Examples: tag `v1.1.0` → `1.1.0`; 3 commits later → `1.1.0-3-gabc1234`
+ */
+fun resolveVersionName(): String {
+    val override = localProperties.getProperty("VERSION_NAME")?.takeIf { it.isNotBlank() }
+        ?: System.getenv("VERSION_NAME")?.takeIf { it.isNotBlank() }
+    if (override != null) return stripVersionPrefix(override)
+
+    val describe = runGit("describe", "--tags", "--match", "v*", "--dirty")
+        ?: runGit("describe", "--tags", "--dirty")
+    if (describe != null) return stripVersionPrefix(describe)
+
+    val shortSha = runGit("rev-parse", "--short", "HEAD")
+    return if (shortSha != null) "0.1.0-$shortSha" else "0.1.0-dev"
+}
+
+/**
+ * versionCode resolution (first hit wins):
+ * 1. VERSION_CODE env / local.properties
+ * 2. Monotonic `git rev-list --count HEAD` (safe for side-loading / Play uploads)
+ * 3. Encoded semver core from versionName
+ */
+fun resolveVersionCode(versionName: String): Int {
+    val override = localProperties.getProperty("VERSION_CODE")?.toIntOrNull()?.takeIf { it > 0 }
+        ?: System.getenv("VERSION_CODE")?.toIntOrNull()?.takeIf { it > 0 }
+    if (override != null) return override
+
+    runGit("rev-list", "--count", "HEAD")?.toIntOrNull()?.takeIf { it > 0 }?.let { return it }
+
+    val core = versionName.substringBefore('-').substringBefore('+')
+    val parts = core.split('.').mapNotNull { token ->
+        token.filter { it.isDigit() }.takeIf { it.isNotEmpty() }?.toIntOrNull()
+    }
+    val major = parts.getOrElse(0) { 0 }
+    val minor = parts.getOrElse(1) { 0 }
+    val patch = parts.getOrElse(2) { 0 }
+    return (major * 1_000_000 + minor * 1_000 + patch).coerceAtLeast(1)
+}
+
+val appVersionName: String = resolveVersionName()
+val appVersionCode: Int = resolveVersionCode(appVersionName)
+logger.lifecycle("TyphoonEye versionName=$appVersionName versionCode=$appVersionCode")
+
 android {
     namespace = "seamain.org.typhoonEye"
     compileSdk = 36
@@ -39,8 +103,8 @@ android {
         applicationId = "seamain.org.typhoonEye"
         minSdk = 29
         targetSdk = 36
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = appVersionCode
+        versionName = appVersionName
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -66,6 +130,38 @@ android {
             "MAPLIBRE_STYLE_URL",
             (localProperties.getProperty("MAPLIBRE_STYLE_URL")?.takeIf { it.isNotBlank() }
                 ?: "").asBuildConfigLiteral()
+        )
+        // Amap (高德) Web Key — used for mainland China basemap tiles. Create at https://console.amap.com/dev/key/app
+        // Key type: 「Web服务」or 「Web端(JS API)」 depending on console product; tile auth is best-effort.
+        buildConfigField(
+            "String",
+            "AMAP_KEY",
+            (localProperties.getProperty("AMAP_KEY")?.takeIf { it.isNotBlank() }
+                ?: System.getenv("AMAP_KEY")?.takeIf { it.isNotBlank() }
+                ?: "").asBuildConfigLiteral()
+        )
+        // Optional basemap force: auto | amap | open
+        buildConfigField(
+            "String",
+            "MAP_BASEMAP",
+            (localProperties.getProperty("MAP_BASEMAP")?.takeIf { it.isNotBlank() }
+                ?: System.getenv("MAP_BASEMAP")?.takeIf { it.isNotBlank() }
+                ?: "auto").asBuildConfigLiteral()
+        )
+        // In-app updates via GitHub Releases API
+        buildConfigField(
+            "String",
+            "GITHUB_OWNER",
+            (localProperties.getProperty("GITHUB_OWNER")?.takeIf { it.isNotBlank() }
+                ?: System.getenv("GITHUB_OWNER")?.takeIf { it.isNotBlank() }
+                ?: "Seamain").asBuildConfigLiteral()
+        )
+        buildConfigField(
+            "String",
+            "GITHUB_REPO",
+            (localProperties.getProperty("GITHUB_REPO")?.takeIf { it.isNotBlank() }
+                ?: System.getenv("GITHUB_REPO")?.takeIf { it.isNotBlank() }
+                ?: "TyphoonEyeAndroid").asBuildConfigLiteral()
         )
     }
 
