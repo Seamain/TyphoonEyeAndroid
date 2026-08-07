@@ -1,0 +1,7 @@
+TyphoonEye is a lightweight, open-source real-time typhoon tracking and weather alert application for Android.
+
+Features:
+• Live Typhoon Tracking: Monitor active tropical cyclones with interactive map rendering.
+• Weather Alerts & Distance Calculations: Automatic distance calculation relative to user location.
+• Customizable Map Basemaps: Built-in support for vector and raster map styles powered by MapLibre.
+• 100% Free & Open Source: Completely free of non-free dependencies, analytics, or proprietary trackers.

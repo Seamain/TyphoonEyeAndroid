@@ -1,0 +1,31 @@
+Categories:
+  - Weather
+  - Navigation
+License: Apache-2.0
+SourceCode: https://github.com/Seamain/TyphoonEyeAndroid
+IssueTracker: https://github.com/Seamain/TyphoonEyeAndroid/issues
+
+AutoName: TyphoonEye
+Summary: Real-time typhoon tracking and meteorological map visualization
+Description: |-
+  TyphoonEye is a lightweight, open-source real-time typhoon tracking and weather alert application for Android.
+
+  Features:
+  • Live Typhoon Tracking: Monitor active tropical cyclones with interactive map rendering.
+  • Weather Alerts & Distance Calculations: Automatic distance calculation relative to user location.
+  • Customizable Map Basemaps: Built-in support for vector and raster map styles powered by MapLibre.
+  • 100% Free & Open Source: Completely free of non-free dependencies, analytics, or proprietary trackers.
+
+RepoType: git
+Repo: https://github.com/Seamain/TyphoonEyeAndroid.git
+
+Builds:
+  - versionName: 1.0.0
+    versionCode: 1
+    commit: foss
+    subdir: app
+    gradle:
+      - yes
+
+AutoUpdateMode: Version v%v
+UpdateCheckMode: Tags ^v[0-9.]+$

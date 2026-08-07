@@ -249,7 +249,6 @@ dependencies {
     // Activity-scoped ViewModels: default viewModel() + @AndroidEntryPoint is enough.
     // (hilt-navigation-compose only needed for per-backStackEntry hiltViewModel().)
     implementation(libs.hilt.work)
-    implementation(libs.play.services.location)
     ksp(libs.androidx.room.compiler)
     ksp(libs.hilt.compiler)
     ksp(libs.hilt.androidx.compiler)
