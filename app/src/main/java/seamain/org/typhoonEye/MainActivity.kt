@@ -54,6 +54,8 @@ import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.flow.MutableStateFlow
 import org.maplibre.android.MapLibre
 import seamain.org.typhoonEye.data.preferences.ThemeMode
+import seamain.org.typhoonEye.domain.model.Typhoon
+import seamain.org.typhoonEye.domain.util.typhoonIdsMatch
 import seamain.org.typhoonEye.live.TyphoonLiveNotifier
 import seamain.org.typhoonEye.live.TyphoonLiveUpdateWorker
 import seamain.org.typhoonEye.ui.TyphoonViewModel
@@ -383,16 +385,22 @@ fun TyphoonApp(
         ) { entry ->
             val typhoonId = entry.arguments?.getString(AppDestination.ArgTyphoonId).orEmpty()
             var detailRequested by remember(typhoonId) { mutableStateOf(false) }
+            // Sticky snapshot so a mid-load id remap / list refresh cannot unmount DetailScreen.
+            var displayedTyphoon by remember(typhoonId) { mutableStateOf<Typhoon?>(null) }
 
             LaunchedEffect(typhoonId) {
                 if (typhoonId.isBlank()) return@LaunchedEffect
                 detailRequested = true
-                if (selectedTyphoon?.id != typhoonId) {
+                if (!typhoonIdsMatch(selectedTyphoon?.id, typhoonId)) {
                     viewModel.selectTyphoonById(typhoonId)
                 }
             }
 
-            val typhoon = selectedTyphoon?.takeIf { it.id == typhoonId }
+            val matched = selectedTyphoon?.takeIf { typhoonIdsMatch(it.id, typhoonId) }
+            LaunchedEffect(matched) {
+                if (matched != null) displayedTyphoon = matched
+            }
+            val typhoon = matched ?: displayedTyphoon
             BackHandler(onBack = ::leaveDetail)
 
             when {
@@ -421,11 +429,8 @@ fun TyphoonApp(
                         }
                     )
                 }
-                // First frames / in-flight fetch / id mismatch — never show a blank surface.
-                // Note: delegated State cannot be smart-cast; use local snapshot.
-                !detailRequested ||
-                    detailLoading ||
-                    (selectedTyphoon.let { it != null && it.id != typhoonId }) -> {
+                // First frames / in-flight fetch — never flash a blank surface.
+                !detailRequested || detailLoading -> {
                     DetailLoadingPlaceholder(loading = true, onBack = ::leaveDetail)
                 }
                 else -> {

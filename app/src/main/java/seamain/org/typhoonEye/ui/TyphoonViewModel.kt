@@ -27,6 +27,7 @@ import seamain.org.typhoonEye.domain.repository.TyphoonRepository
 import seamain.org.typhoonEye.domain.repository.WarningRepository
 import seamain.org.typhoonEye.domain.util.distanceKmFrom
 import seamain.org.typhoonEye.domain.util.roundKm
+import seamain.org.typhoonEye.domain.util.typhoonIdsMatch
 import seamain.org.typhoonEye.live.TyphoonAlertNotifier
 import seamain.org.typhoonEye.live.TyphoonLiveNotifier
 import seamain.org.typhoonEye.live.TyphoonLiveUpdateWorker
@@ -80,6 +81,7 @@ class TyphoonViewModel @Inject constructor(
     val intensityFilter: StateFlow<IntensityLevel?> = _intensityFilter.asStateFlow()
 
     private var refreshJob: Job? = null
+    private var detailJob: Job? = null
 
     private val _dataMode = MutableStateFlow(DataMode.Live)
     val dataMode: StateFlow<DataMode> = _dataMode.asStateFlow()
@@ -327,7 +329,14 @@ class TyphoonViewModel @Inject constructor(
                     _dataMode.value = DataMode.Live
                     _lastUpdatedAtMs.value = System.currentTimeMillis()
                     _selectedTyphoon.value?.let { selected ->
-                        _selectedTyphoon.value = feed.typhoons.find { it.id == selected.id } ?: selected
+                        val fromFeed = feed.typhoons.find { typhoonIdsMatch(it.id, selected.id) }
+                        _selectedTyphoon.value = when {
+                            // Keep in-memory detail if the list snapshot is thinner.
+                            fromFeed == null -> selected
+                            selected.points.size > fromFeed.points.size -> selected
+                            // Preserve the id the user navigated with (Juhe vs NP_*).
+                            else -> fromFeed.copy(id = selected.id)
+                        }
                     }
                 }
                 .onFailure { error ->
@@ -343,15 +352,16 @@ class TyphoonViewModel @Inject constructor(
 
     fun selectTyphoon(typhoon: Typhoon?) {
         _selectedTyphoon.value = typhoon
-        if (typhoon != null && typhoon.points.size <= 1 && _dataMode.value == DataMode.Live) {
+        if (typhoon != null && _dataMode.value == DataMode.Live && needsDetailFetch(typhoon)) {
             loadDetail(typhoon.id)
         }
     }
 
     fun selectTyphoonById(id: String) {
-        val found = _allTyphoons.value.find { it.id == id }
+        val found = _allTyphoons.value.find { typhoonIdsMatch(it.id, id) }
         if (found != null) {
-            selectTyphoon(found)
+            // Keep nav/deep-link id so Detail route matching stays stable.
+            selectTyphoon(if (found.id == id) found else found.copy(id = id))
         } else {
             // Eager flag so Detail route never flashes an empty/error frame.
             _detailLoading.value = true
@@ -359,25 +369,47 @@ class TyphoonViewModel @Inject constructor(
         }
     }
 
+    /** List snapshots are often a single “now” point — still need full track/forecast. */
+    private fun needsDetailFetch(typhoon: Typhoon): Boolean {
+        if (typhoon.points.size <= 1) return true
+        // Sparse history without forecast is usually a list fallback, not a full detail payload.
+        if (typhoon.forecastPoints.isEmpty() && typhoon.points.size < 4) return true
+        return false
+    }
+
     fun loadDetail(id: String) {
-        viewModelScope.launch {
+        detailJob?.cancel()
+        detailJob = viewModelScope.launch {
             _detailLoading.value = true
-            repository.getTyphoonDetail(id)
-                .onSuccess { detail ->
-                    _selectedTyphoon.value = detail
-                    _allTyphoons.value = _allTyphoons.value.map {
-                        if (it.id == detail.id) detail else it
-                    }
-                    val state = _uiState.value
-                    if (state is TyphoonUiState.Success) {
-                        _uiState.value = state.copy(
-                            typhoons = state.typhoons.map {
-                                if (it.id == detail.id) detail else it
+            try {
+                repository.getTyphoonDetail(id)
+                    .onSuccess { detail ->
+                        // Always keep the id used by navigation / selection.
+                        val stable = if (detail.id == id) detail else detail.copy(id = id)
+                        _selectedTyphoon.value = stable
+                        _allTyphoons.value = _allTyphoons.value.map {
+                            if (typhoonIdsMatch(it.id, id) || typhoonIdsMatch(it.id, detail.id)) {
+                                stable
+                            } else {
+                                it
                             }
-                        )
+                        }
+                        val state = _uiState.value
+                        if (state is TyphoonUiState.Success) {
+                            _uiState.value = state.copy(
+                                typhoons = state.typhoons.map {
+                                    if (typhoonIdsMatch(it.id, id) || typhoonIdsMatch(it.id, detail.id)) {
+                                        stable
+                                    } else {
+                                        it
+                                    }
+                                }
+                            )
+                        }
                     }
-                }
-            _detailLoading.value = false
+            } finally {
+                _detailLoading.value = false
+            }
         }
     }
 

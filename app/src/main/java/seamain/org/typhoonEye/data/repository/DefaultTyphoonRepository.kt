@@ -131,6 +131,8 @@ class DefaultTyphoonRepository @Inject constructor(
             return Result.failure(Exception("无法获取台风详情: $id（和风凭证未配置）"))
         }
 
+        // Keep the caller/nav id stable. QWeather storm id is only for the HTTP path;
+        // returning NP_* here used to desync Detail route matching (flash → endless loading).
         val stormId = if (id.startsWith("NP_")) id else "NP_${id.takeLast(4)}"
         try {
             val track = qWeatherApi.getStormTrack(stormId)
@@ -138,7 +140,7 @@ class DefaultTyphoonRepository @Inject constructor(
                 val forecast = runCatching { qWeatherApi.getStormForecast(stormId) }.getOrNull()
                 val infoNow = track.now
                 val typhoon = Typhoon(
-                    id = stormId,
+                    id = id,
                     name = stormId,
                     englishName = stormId,
                     status = if (track.isActive == "1") "active" else "dissipated",
