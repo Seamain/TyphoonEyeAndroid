@@ -95,4 +95,14 @@
 
 ## 📄 开源许可证
 
-本项目采用 Apache License 2.0 许可证。详见 [LICENSE](LICENSE) 文件。
+**台风眼（TyphoonEye）** 以 **[Apache License 2.0](LICENSE)** 开源发布  
+（[SPDX](https://spdx.org/licenses/Apache-2.0.html)：`Apache-2.0`）。
+
+| 文件 | 说明 |
+|------|------|
+| [LICENSE](LICENSE) | Apache License 2.0 全文 |
+| [NOTICE](NOTICE) | 版权与第三方组件致谢 |
+
+应用内路径：**设置 → 关于 → 开源许可与致谢**。
+
+地图瓦片与气象数据服务条款以各提供方为准，不在本 Apache-2.0 授权范围内。

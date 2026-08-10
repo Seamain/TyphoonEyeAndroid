@@ -52,6 +52,13 @@ data class OssLibrary(
 
 val openSourceLibraries = listOf(
     OssLibrary(
+        name = "TyphoonEye",
+        developer = "Seamain & contributors",
+        license = "Apache-2.0",
+        descriptionRes = R.string.oss_app_desc,
+        url = "https://github.com/Seamain/TyphoonEyeAndroid/blob/master/LICENSE"
+    ),
+    OssLibrary(
         name = "Jetpack Compose & Material 3",
         developer = "Google Open Source",
         license = "Apache-2.0",

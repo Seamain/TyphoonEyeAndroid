@@ -82,4 +82,14 @@ Automated builds are configured via **GitHub Actions** (`.github/workflows/build
 
 ## 📄 License
 
-This project is licensed under the Apache License 2.0. See the [LICENSE](LICENSE) file for details.
+**TyphoonEye** is free and open-source software licensed under the **[Apache License 2.0](LICENSE)**  
+([SPDX](https://spdx.org/licenses/Apache-2.0.html): `Apache-2.0`).
+
+| File | Purpose |
+|------|---------|
+| [LICENSE](LICENSE) | Full Apache License 2.0 text |
+| [NOTICE](NOTICE) | Copyright and third-party attribution notes |
+
+In the app: **Settings → About → Open Source Licenses**.
+
+Map tiles and weather APIs remain under their respective providers’ terms and are not covered by this Apache-2.0 grant.

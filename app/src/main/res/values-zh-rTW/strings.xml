@@ -243,7 +243,8 @@
     <string name="cd_language_option">語言：%1$s</string>
     <string name="open_source_licenses">開源許可與致謝</string>
     <string name="open_source_licenses_subtitle">感謝優秀的開源專案與社群貢獻者</string>
-    <string name="open_source_licenses_desc">颱風眼基於以下優秀開源專案建置，感謝所有維護者的無私貢獻：</string>
+    <string name="open_source_licenses_desc">颱風眼以 Apache License 2.0 開源，並基於以下優秀開源專案建置，感謝所有維護者的無私貢獻：</string>
+    <string name="oss_app_desc">本應用原始碼授權為 Apache License 2.0。完整全文見倉庫根目錄 LICENSE，第三方聲明見 NOTICE。</string>
     <string name="oss_compose_desc">Android 官方現代宣告式 UI 工具包與 Material Design 3 元件庫</string>
     <string name="oss_coroutines_desc">Kotlin 異步並發協程支援與高效 JSON 跨平台序列化框架</string>
     <string name="oss_hilt_desc">Android 官方推薦的標準化依賴注入 (DI) 解答方案</string>

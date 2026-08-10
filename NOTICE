@@ -1,0 +1,19 @@
+TyphoonEye (台风眼)
+Copyright 2024-2026 Seamain and contributors
+
+This product is licensed under the Apache License, Version 2.0.
+See the LICENSE file for the full license text.
+
+This product includes software developed by third parties.
+Notable dependencies include (non-exhaustive):
+
+- AndroidX / Jetpack (Google / AOSP) — Apache-2.0
+- Kotlin, kotlinx libraries (JetBrains) — Apache-2.0
+- MapLibre Native Android — BSD-style (see upstream)
+- OkHttp, Retrofit (Square) — Apache-2.0
+- Dagger / Hilt — Apache-2.0
+- Material Components / Compose Material — Apache-2.0
+
+Map tiles and weather APIs (OpenStreetMap/Carto-style sources, Amap, Juhe,
+QWeather, etc.) are separate services. Their data and branding remain subject
+to the respective providers' terms and are not part of this Apache-2.0 grant.

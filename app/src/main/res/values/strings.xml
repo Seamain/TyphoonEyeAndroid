@@ -244,7 +244,8 @@
     <string name="cd_language_option">语言：%1$s</string>
     <string name="open_source_licenses">开源许可与致谢</string>
     <string name="open_source_licenses_subtitle">感谢优秀的开源项目与社区贡献者</string>
-    <string name="open_source_licenses_desc">台风眼基于以下优秀开源项目构建，感谢所有维护者的无私贡献：</string>
+    <string name="open_source_licenses_desc">台风眼以 Apache License 2.0 开源，并基于以下优秀开源项目构建，感谢所有维护者的无私贡献：</string>
+    <string name="oss_app_desc">本应用源码许可证为 Apache License 2.0。完整文本见仓库根目录 LICENSE，第三方声明见 NOTICE。</string>
     <string name="oss_compose_desc">Android 官方现代声明式 UI 工具包与 Material Design 3 组件库</string>
     <string name="oss_coroutines_desc">Kotlin 异步并发协程支持与高效 JSON 跨平台序列化框架</string>
     <string name="oss_hilt_desc">Android 官方推荐的标准化依赖注入 (DI) 解决方案</string>

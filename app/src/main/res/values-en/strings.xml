@@ -243,7 +243,8 @@
     <string name="cd_language_option">Language: %1$s</string>
     <string name="open_source_licenses">Open Source Licenses</string>
     <string name="open_source_licenses_subtitle">Thanks to open-source projects &amp; contributors</string>
-    <string name="open_source_licenses_desc">Typhoon Eye is built with the following open-source projects. Special thanks to all maintainers:</string>
+    <string name="open_source_licenses_desc">TyphoonEye is released under Apache License 2.0 and built with the following open-source projects. Special thanks to all maintainers:</string>
+    <string name="oss_app_desc">This app is licensed under Apache License 2.0. See LICENSE in the repository root and NOTICE for third-party attributions.</string>
     <string name="oss_compose_desc">Official modern declarative UI toolkit and Material Design 3 component library for Android</string>
     <string name="oss_coroutines_desc">Asynchronous concurrency coroutines and high-performance cross-platform JSON serialization</string>
     <string name="oss_hilt_desc">Official recommended standardized dependency injection (DI) solution for Android</string>
