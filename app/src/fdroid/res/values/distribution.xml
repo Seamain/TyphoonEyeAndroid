@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- F-Droid builds: updates only via the F-Droid client -->
+    <bool name="enable_in_app_updates">false</bool>
+</resources>

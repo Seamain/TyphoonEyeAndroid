@@ -149,6 +149,7 @@
     <string name="update_error_network">Network unavailable. Check your connection.</string>
     <string name="update_error_download_failed">Download failed. Check your network and retry.</string>
     <string name="update_error_apk_missing">APK missing. Please download again.</string>
+    <string name="update_error_disabled_fdroid">Please update this build through F-Droid.</string>
     <string name="language_title">App language</string>
     <string name="language_subtitle">Follows system by default; the home-screen name switches too</string>
     <string name="language_system">System default</string>

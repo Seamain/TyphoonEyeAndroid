@@ -2,10 +2,10 @@ name: Build & Release Android APK
 
 on:
   push:
-    branches: [ "main", "master" ]
+    branches: [ "main", "master", "foss" ]
     tags: [ "v*" ]
   pull_request:
-    branches: [ "main", "master" ]
+    branches: [ "main", "master", "foss" ]
   workflow_dispatch:
     inputs:
       build_type:
@@ -112,7 +112,7 @@ jobs:
           JUHEKEY: ${{ secrets.JUHEKEY }}
           VERSION_NAME: ${{ env.VERSION_NAME }}
           VERSION_CODE: ${{ env.VERSION_CODE }}
-        run: ./gradlew assembleDebug --stacktrace
+        run: ./gradlew assembleGithubDebug --stacktrace
 
       - name: Build Release APK
         if: ${{ inputs.build_type == 'release' || inputs.build_type == '' }}
@@ -122,7 +122,8 @@ jobs:
           JUHEKEY: ${{ secrets.JUHEKEY }}
           VERSION_NAME: ${{ env.VERSION_NAME }}
           VERSION_CODE: ${{ env.VERSION_CODE }}
-        run: ./gradlew assembleRelease --stacktrace
+        # github flavor keeps in-app GitHub updates; F-Droid builds use assembleFdroidRelease.
+        run: ./gradlew assembleGithubRelease --stacktrace
 
       - name: Process & Rename APK Artifacts
         run: |

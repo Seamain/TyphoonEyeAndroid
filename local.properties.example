@@ -1,54 +1,45 @@
-## Typhoon Eye — local.properties 示例
+## TyphoonEye — local.properties example
 #
-# 对齐 Postman Collection「Typhoon Eye」
-# https://go.postman.co/collection/19016561-6ce3304f-d208-49a2-84f0-09c5be542672
+# Copy to project root as local.properties (gitignored).
+# Without keys the app runs in demo / offline-cache mode.
+
+# sdk.dir=/path/to/Android/sdk
+
+# ---------- Juhe (optional live typhoon list / track) ----------
+# https://www.juhe.cn/
+# JUHE_KEY=
+
+# ---------- QWeather (optional live typhoon + warnings) ----------
+# Console: https://console.qweather.com/
+# Default host is the public API. Use your dedicated host if you have one.
+# QWEATHER_HOST=https://devapi.qweather.com/
 #
-# 复制到项目根目录 local.properties（已被 gitignore）。
-
-# sdk.dir=/Users/YOU/Library/Android/sdk
-
-# ---------- Juhe（Postman：聚合台风列表 / 聚合台风实时路径）----------
-# GET https://apis.juhe.cn/fapigw/typhoon/active?key=...
-# GET https://apis.juhe.cn/fapigw/typhoon/detail?key=...&tfid=...
-JUHE_KEY=your_juhe_api_key_here
-
-# ---------- QWeather（Postman：和风天气台风查询 / 预报 / 路径）----------
-# Collection 级 Auth: Bearer {{JWT_key}}
-# Collection 变量: api_host, JWT_key (secret)
+# Recommended: API Key → X-QW-Api-Key
+# QWEATHER_API_KEY=
 #
-# GET {{api_host}}/v7/tropical/storm-list?basin=NP&year=2026
-# GET {{api_host}}/v7/tropical/storm-forecast?stormid=NP_2609
-# GET {{api_host}}/v7/tropical/storm-track?stormid=NP_2609
-
-QWEATHER_HOST=https://pu6yvrgfbv.re.qweatherapi.com/
-
-# 方式 A（推荐）：控制台 API KEY → Header X-QW-Api-Key
-QWEATHER_API_KEY=your_qweather_api_key_here
-
-# 方式 B：EdDSA JWT（kid + projectId + 私钥 PEM）
-# QWEATHER_KID=your_credential_id
-# QWEATHER_PROJECT_ID=your_project_id
+# Or EdDSA JWT (kid + projectId + PEM private key)
+# QWEATHER_KID=
+# QWEATHER_PROJECT_ID=
 # QWEATHER_PRIVATE_KEY=-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----
 
-# ---------- 地图底图（可选）----------
-# 默认「自动」：大陆 → 高德；其它地区 → 国际（Carto/OSM）
-# 用户可在「设置 → 外观 → 地图底图」选：自动 / 高德 / 国际
-# 地图左下角会显示当前实际底图标识（高德地图 / OpenStreetMap）
-# MAPLIBRE_STYLE_URL=https://demotiles.maplibre.org/style.json
-#
-# 高德 Key（控制台 https://console.amap.com/dev/key/app ）
-# AMAP_KEY=your_amap_web_key_here
-#
-# 编译期强制覆盖（一般不用）：amap | open
-# MAP_BASEMAP=amap
-#
-# ---------- 应用内更新（GitHub Releases）----------
-# 默认仓库 Seamain/TyphoonEyeAndroid；发版 tag 如 v1.1.0 且附带 .apk
+# ---------- Map (optional) ----------
+# Mainland China basemap (Amap Web key): https://console.amap.com/dev/key/app
+# AMAP_KEY=
+# Force basemap at build time: auto | amap | open
+# MAP_BASEMAP=auto
+# MAPLIBRE_STYLE_URL=
+
+# ---------- In-app updates (GitHub flavor only) ----------
 # GITHUB_OWNER=Seamain
 # GITHUB_REPO=TyphoonEyeAndroid
-#
-# ---------- 版本号（通常无需手写）----------
-# 默认从最近的 Git tag（vX.Y.Z）写入 versionName；versionCode 用 commit 计数。
-# CI 推送 tag 时会自动注入。仅在无 git 历史或需要强制覆盖时取消注释：
-# VERSION_NAME=1.1.0
-# VERSION_CODE=12
+
+# ---------- Version overrides (optional) ----------
+# Prefer root version.properties for releases.
+# VERSION_NAME=1.2.0
+# VERSION_CODE=15
+
+# ---------- Release signing (CI / local release) ----------
+# RELEASE_STORE_FILE=release.keystore
+# RELEASE_STORE_PASSWORD=
+# RELEASE_KEY_ALIAS=
+# RELEASE_KEY_PASSWORD=

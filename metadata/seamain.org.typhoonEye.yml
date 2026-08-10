@@ -2,30 +2,53 @@ Categories:
   - Weather
   - Navigation
 License: Apache-2.0
+AuthorName: Seamain
+WebSite: https://github.com/Seamain/TyphoonEyeAndroid
 SourceCode: https://github.com/Seamain/TyphoonEyeAndroid
 IssueTracker: https://github.com/Seamain/TyphoonEyeAndroid/issues
 
 AutoName: TyphoonEye
+
+# Keep under 80 characters.
 Summary: Real-time typhoon tracking and meteorological map visualization
 Description: |-
-  TyphoonEye is a lightweight, open-source real-time typhoon tracking and weather alert application for Android.
+  TyphoonEye is a lightweight, open-source real-time typhoon tracking and
+  weather alert application for Android.
 
   Features:
-  • Live Typhoon Tracking: Monitor active tropical cyclones with interactive map rendering.
-  • Weather Alerts & Distance Calculations: Automatic distance calculation relative to user location.
-  • Customizable Map Basemaps: Built-in support for vector and raster map styles powered by MapLibre.
-  • 100% Free & Open Source: Completely free of non-free dependencies, analytics, or proprietary trackers.
+  * Live typhoon tracking with interactive MapLibre map rendering
+  * Historical track, forecast path, and multi-quadrant wind radii
+  * Optional distance-based emergency alerts (location permission)
+  * Material Design 3, dynamic color, and multiple languages
+  * Works offline with cached or bundled demo data when no API keys are set
+
+  Network services (NonFreeNet):
+  Live meteorological data may be fetched from third-party weather APIs
+  (e.g. Juhe / QWeather) when the builder or user supplies keys. Optional
+  mainland China basemap tiles may use Amap. Without keys the app still runs
+  in demo / cache mode. No analytics or ads.
+
+  F-Droid builds disable GitHub sideload updates; please update through
+  F-Droid.
 
 RepoType: git
 Repo: https://github.com/Seamain/TyphoonEyeAndroid.git
 
 Builds:
-  - versionName: 1.0.0
-    versionCode: 1
-    commit: foss
+  # After tagging the release on GitHub, set commit to that tag (e.g. v1.2.0).
+  # versionName / versionCode must match version.properties in the tagged commit.
+  - versionName: 1.2.0
+    versionCode: 15
+    commit: v1.2.0
     subdir: app
     gradle:
-      - yes
+      - fdroid
+
+AntiFeatures:
+  - NonFreeNet
 
 AutoUpdateMode: Version v%v
-UpdateCheckMode: Tags ^v[0-9.]+$
+UpdateCheckMode: Tags
+UpdateCheckData: version.properties|VERSION_CODE=(\d+)|.|VERSION_NAME=(.*)
+CurrentVersion: 1.2.0
+CurrentVersionCode: 15

@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- github / default builds: allow GitHub Releases in-app updates -->
+    <bool name="enable_in_app_updates">true</bool>
+</resources>

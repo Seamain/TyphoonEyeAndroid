@@ -2,7 +2,7 @@
   "info": {
     "_postman_id": "6ce3304f-d208-49a2-84f0-09c5be542672",
     "name": "Typhoon Eye",
-    "description": "Synced from Postman workspace「My Workspace」。密钥请用环境变量，勿硬编码。",
+    "description": "TyphoonEye API smoke tests. Put secrets in the environment file — never hardcode keys.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "auth": {
@@ -10,11 +10,11 @@
     "bearer": [{ "key": "token", "value": "{{JWT_key}}", "type": "string" }]
   },
   "variable": [
-    { "key": "api_host", "value": "https://pu6yvrgfbv.re.qweatherapi.com" },
+    { "key": "api_host", "value": "https://devapi.qweather.com" },
     { "key": "JWT_key", "value": "", "type": "secret" },
     { "key": "JUHE_KEY", "value": "" },
-    { "key": "TFID", "value": "202609" },
-    { "key": "STORM_ID", "value": "NP_2609" },
+    { "key": "TFID", "value": "" },
+    { "key": "STORM_ID", "value": "" },
     { "key": "YEAR", "value": "2026" }
   ],
   "item": [

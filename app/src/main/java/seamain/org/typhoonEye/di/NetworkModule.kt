@@ -135,7 +135,7 @@ object NetworkModule {
     ): Retrofit {
         val mediaType = "application/json".toMediaType()
         val host = BuildConfig.QWEATHER_HOST.ifBlank {
-            "https://pu6yvrgfbv.re.qweatherapi.com/"
+            "https://devapi.qweather.com/"
         }.let { if (it.endsWith("/")) it else "$it/" }
         return Retrofit.Builder()
             .baseUrl(host)

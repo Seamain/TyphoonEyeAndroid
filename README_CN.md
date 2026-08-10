@@ -1,98 +1,176 @@
-# 🌀 TyphoonEye (台风眼)
+# 台风眼（TyphoonEye）
 
 [![Build Android APK](https://github.com/Seamain/TyphoonEyeAndroid/actions/workflows/build-apk.yml/badge.svg)](https://github.com/Seamain/TyphoonEyeAndroid/actions/workflows/build-apk.yml)
 [![Kotlin](https://img.shields.io/badge/Kotlin-2.0+-7F52FF.svg?style=flat&logo=kotlin)](https://kotlinlang.org/)
 [![Android SDK](https://img.shields.io/badge/API-29%2B-3DDC84.svg?style=flat&logo=android)](https://developer.android.com/)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
+[![F-Droid](https://img.shields.io/badge/F--Droid-metadata-1976D2.svg?style=flat)](metadata/seamain.org.typhoonEye.yml)
 
 [English](README.md) | 中文
 
-**台风眼 (TyphoonEye)** 是一款极具现代感、基于 **Jetpack Compose** 与 **Material Design 3** 构建的 Android 台风实时追踪与预警防护应用。支持多象限风圈可视化渲染、离线数据缓存及基于距离的预警提醒。
+**台风眼（TyphoonEye）** 是一款开源 Android 应用，面向**西北太平洋台风**实时路径、多象限风圈、预报轨迹与可选距离预警。
+
+基于 **Jetpack Compose** 与 **Material Design 3**。
+
+> **免责声明：** 本应用为第三方客户端，**不是**任何气象机构的官方产品。紧急情况下请以当地官方预警与政府指引为准。
 
 ---
 
-## ✨ 核心特性
+## 功能
 
-- 🌀 **交互式地图与风圈渲染**：基于 MapLibre 矢量地图引擎，实时渲染台风历史轨迹、预报路径以及 7级/10级/12级 东北、东南、西南、西北四象限风圈多边形。
-- 📍 **距离感知与紧急预警**：计算用户当前定位与台风中心的实时距离，并在接近风险区域时触发紧急预警与通知。
-- 📊 **详尽的台风观测详情**：提供中心气压、最大持续风速、移动速度、移动方向及完整的观测时间线序列数据。
-- 🔔 **实时状态与后台定时更新**：基于 `WorkManager` 实现常驻后台更新调度，提供实时状态通知栏常驻卡片。
-- 🎨 **Material Design 3 与动态色彩**：全面采用 Material 3 设计规范，完美适配浅色/深色主题，并支持 Android 12+ Monet 动态调色盘。
-- 🌐 **多语言国际化**：原生支持简体中文、繁體中文、粵語及英文。
-- 📜 **开源致谢与隐私保障**：内置完整的开源许可致谢页面与离线防走丢演示模式。
-
----
-
-## 🛠 技术栈与架构设计
-
-应用严格遵循 **Clean Architecture** 架构理念与 **MVVM** 模式，结合官方 Jetpack 组件进行标准化开发。
-
-- **界面与导航**：[Jetpack Compose](https://developer.android.com/jetpack/compose)、[Material 3](https://m3.material.io/)、Navigation Compose
-- **地图引擎**：[MapLibre Android SDK](https://github.com/maplibre/maplibre-native)；默认 [高德地图](https://lbs.amap.com/api) 栅格底图（GCJ-02），可在设置中切换国际 Carto/OSM（WGS-84）
-- **依赖注入**：[Hilt](https://dagger.dev/hilt/) (Dagger)
-- **并发与响应式**：Kotlin 协程 (Coroutines)、StateFlow、SharedFlow
-- **网络层**：[Retrofit 2](https://square.github.io/retrofit/)、[OkHttp 4](https://square.github.io/okhttp/)、Ed25519 密码学 JWT 身份认证
-- **持久化与存储**：[Room Database](https://developer.android.com/training/data-storage/room)、[DataStore Preferences](https://developer.android.com/topic/libraries/architecture/datastore)
-- **后台任务**：[WorkManager](https://developer.android.com/topic/libraries/architecture/workmanager)
-- **CI/CD 流水线**：GitHub Actions 自动化编译打包与 Release 版本发布。
+- **MapLibre** 交互地图：历史路径、预报路径、七 / 十 / 十二级分象限风圈  
+- 台风详情：气压、风速、移速移向、观测时间线  
+- 可选**距离感知紧急预警**（需定位权限）  
+- 实时状态通知 + 后台刷新（`WorkManager`）  
+- Material 3、动态取色、深浅色主题  
+- 语言：简体中文、繁體中文、粵語、English  
+- 未配置密钥时使用**演示数据 / 离线缓存**  
+- 双渠道：
+  - `github`：支持从 GitHub Releases 应用内更新  
+  - `fdroid`：仅通过 F-Droid 更新（无侧载安装权限）
 
 ---
 
-## 🚀 快速开始
+## 技术栈
 
-### 开发环境要求
+| 领域 | 方案 |
+|------|------|
+| 界面 | Jetpack Compose、Material 3、Navigation |
+| 地图 | [MapLibre Native Android](https://github.com/maplibre/maplibre-native) |
+| 注入 | Hilt |
+| 网络 | Retrofit、OkHttp、可选和风 JWT（Ed25519） |
+| 存储 | Room、DataStore |
+| 后台 | WorkManager |
+| CI | GitHub Actions |
 
-- Android Studio Ladybug (2024.2.1+) 或更新版本
-- JDK 21
-- Android SDK 36 (最低支持 minSdk 29)
+架构：**MVVM** + 分层（UI → ViewModel → Repository → 远端/本地）。
 
-### 本地编译
+---
 
-1. 克隆代码仓库：
+## 环境要求
+
+- Android Studio Ladybug（2024.2+）或更新  
+- JDK **21**  
+- Android SDK **36**（minSdk **29**）
+
+---
+
+## 编译
+
+```bash
+git clone https://github.com/Seamain/TyphoonEyeAndroid.git
+cd TyphoonEyeAndroid
+```
+
+### 可选 API Key
+
+```bash
+cp local.properties.example local.properties
+```
+
+| 配置项 | 用途 |
+|--------|------|
+| `JUHE_KEY` | 聚合台风列表 / 详情（可选） |
+| `QWEATHER_API_KEY` 或 JWT 字段 | 和风台风与预警（可选） |
+| `AMAP_KEY` | 中国大陆高德栅格底图（可选） |
+
+不填密钥也可安装运行（演示 / 缓存模式）。  
+详见 [local.properties.example](local.properties.example) 与 [PRIVACY.md](PRIVACY.md)。
+
+### 常用命令
+
+```bash
+# GitHub 渠道 Debug（默认）
+./gradlew assembleGithubDebug
+
+# GitHub 渠道 Release（配置签名后）
+./gradlew assembleGithubRelease
+
+# F-Droid 渠道（关闭 GitHub 应用内更新）
+./gradlew assembleFdroidRelease
+```
+
+### 版本号
+
+以根目录 [`version.properties`](version.properties) 为准：
+
+```properties
+VERSION_NAME=1.2.0
+VERSION_CODE=15
+```
+
+发版请同步改此文件，并打 tag：`v1.2.0`。CI 可用环境变量覆盖。
+
+---
+
+## 发布与 CI
+
+工作流： [`.github/workflows/build-apk.yml`](.github/workflows/build-apk.yml)
+
+- 推送 / PR → 构建产物  
+- 推送 `v*` 标签 → GitHub Release + `github` 渠道 APK  
+
+可选仓库 Secrets：API Key、Release 签名密钥库。
+
+---
+
+## F-Droid 投稿说明
+
+**应用源码继续放在 GitHub，不必整体迁到 GitLab。**
+
+向 F-Droid 投稿时，只需在 GitLab 的 **[fdroiddata](https://gitlab.com/fdroid/fdroiddata)** 提交 metadata 的 Merge Request。
+
+仓库内已准备：
+
+| 路径 | 说明 |
+|------|------|
+| `metadata/seamain.org.typhoonEye.yml` | 可复制到 fdroiddata 的构建描述 |
+| `metadata/en-US`、`metadata/zh-CN` | 商店文案 |
+| `version.properties` | 版本检测 |
+| productFlavor `fdroid` | 关闭 GitHub 侧载更新 |
+| `AntiFeatures: NonFreeNet` | 第三方气象接口 / 可选高德瓦片 |
+
+### 投稿步骤
+
+1. 提交本仓库改动并推送到 GitHub  
+2. 更新 `version.properties`，打 tag 并推送，例如：
    ```bash
-   git clone https://github.com/Seamain/TyphoonEyeAndroid.git
-   cd TyphoonEyeAndroid
+   git tag v1.2.0
+   git push origin foss   # 或你的主分支
+   git push origin v1.2.0
    ```
-
-2. (可选) 配置 API Key：
-   复制 `local.properties.example` 为 `local.properties` 并填写密钥：
-   ```properties
-   QWEATHER_API_KEY=your_qweather_api_key
-   QWEATHER_KID=your_key_id
-   QWEATHER_PROJECT_ID=your_project_id
-   QWEATHER_PRIVATE_KEY=your_private_key
-   # 高德开放平台 Key（中国大陆底图，https://console.amap.com/dev/key/app ）
-   AMAP_KEY=your_amap_web_key
-   # 底图强制：auto | amap | open
-   # MAP_BASEMAP=auto
-   # 应用内更新默认读取 GitHub Releases（Seamain/TyphoonEyeAndroid）
-   ```
-
-### 应用内更新
-
-应用启动时会静默检查 GitHub Releases（每天最多一次）；在 **设置 → 关于 → 检查更新** 可手动检查。  
-发现新版本后可下载 APK 并调起系统安装器（需授予「安装未知应用」权限）。  
-
-**版本号写入规则：** `versionName` 取自最近的 GitHub Tag（如 `v1.1.0` → `1.1.0`），`versionCode` 为 commit 计数；CI 推送 `v*` 标签构建时会自动注入。发版请推送 `vX.Y.Z` 并附带 `.apk`（GitHub Actions 已支持）。
-
-   *(注：未配置密钥时，应用将自动运行在 Demo / 演示模式)*
-
-3. 编译并安装：
+3. 本地验证无密钥可编过：
    ```bash
-   ./gradlew assembleDebug
+   ./gradlew assembleFdroidRelease
    ```
+4. 在 `metadata/*/images/phoneScreenshots/` 放入至少 2 张截图；建议提供 512×512 `icon.png`  
+5. Fork fdroiddata → 复制 yml → 将 `Builds.commit` 设为该 tag → 开 MR  
 
 ---
 
-## 🤖 自动化构建与发布
+## 隐私
 
-本工程通过 **GitHub Actions** (`.github/workflows/build-apk.yml`) 实现了全自动 CI/CD。
+- 无广告、无统计 SDK  
+- 定位**仅**用于可选距离预警，不会上传到台风眼自有服务器  
+- 气象请求发往你配置的第三方 API  
 
-- **构建产物 (Artifacts)**：每次代码提交都会自动编译产出 Debug 测试包供下载。
-- **自动发布 (Releases)**：推送带有版本号的 Git 标签（例如 `v1.0.0`）时，Actions 会自动提取最新更新日志并打包发布 Release APK 至 [GitHub Release 页面](https://github.com/Seamain/TyphoonEyeAndroid/releases)。
+全文见 [PRIVACY.md](PRIVACY.md)。
 
 ---
 
-## 📄 开源许可证
+## 参与贡献
 
-本项目采用 Apache License 2.0 许可证。详见 [LICENSE](LICENSE) 文件。
+欢迎 Issue 与 Pull Request。
+
+1. 从 `foss` 或 `master` 拉分支  
+2. 改动尽量聚焦，风格与现有代码一致  
+3. **不要**提交 `local.properties`、密钥库或真实 API Key  
+4. 建议 PR 前执行 `./gradlew test`
+
+---
+
+## 许可证
+
+[Apache License 2.0](LICENSE)
+
+地图与气象数据服务条款以各提供方为准。

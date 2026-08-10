@@ -1,85 +1,156 @@
-# 🌀 TyphoonEye
+# TyphoonEye
 
 [![Build Android APK](https://github.com/Seamain/TyphoonEyeAndroid/actions/workflows/build-apk.yml/badge.svg)](https://github.com/Seamain/TyphoonEyeAndroid/actions/workflows/build-apk.yml)
 [![Kotlin](https://img.shields.io/badge/Kotlin-2.0+-7F52FF.svg?style=flat&logo=kotlin)](https://kotlinlang.org/)
 [![Android SDK](https://img.shields.io/badge/API-29%2B-3DDC84.svg?style=flat&logo=android)](https://developer.android.com/)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
+[![F-Droid](https://img.shields.io/badge/F--Droid-metadata-1976D2.svg?style=flat)](metadata/seamain.org.typhoonEye.yml)
 
 English | [中文](README_CN.md)
 
-**TyphoonEye** is a modern, feature-packed Android application built with **Jetpack Compose** and **Material Design 3** for real-time typhoon tracking, quadrant wind radius visualization, and location-aware weather alerts.
+**TyphoonEye** is an open-source Android app for **northwest Pacific typhoon** tracking: interactive maps, multi-quadrant wind radii, forecast paths, and optional location-based alerts.
+
+Built with **Jetpack Compose** and **Material Design 3**.
+
+> **Disclaimer:** TyphoonEye is a third-party client for public weather data. It is **not** an official product of any meteorological agency. Always follow guidance from local authorities in emergencies.
 
 ---
 
-## ✨ Features
+## Features
 
-- 🌀 **Interactive Map & Wind Radii Visualization**: Real-time rendering of typhoon historical tracks, forecast paths, and 7-kt / 10-kt / 12-kt 4-quadrant wind radius polygons using MapLibre vector engine.
-- 📍 **Location-Aware Proximity Alerts**: Calculates real-time distance from the user's location to active typhoon centers and issues emergency warnings.
-- 📊 **Comprehensive Typhoon Details**: View central air pressure, max sustained wind speed, movement speed, moving direction, and detailed time-series observation data.
-- 🔔 **Live Status & Background Updates**: Periodic background updates powered by `WorkManager` with system status notifications.
-- 🎨 **Material Design 3 & Dynamic Color**: Fully adopts Material 3 design system, supporting system dark/light themes and Android 12+ Monet dynamic color palette.
-- 🌐 **Multilingual Support**: Supports Simplified Chinese (简体中文), Traditional Chinese (繁體中文), Cantonese (粵語), and English.
-- 📜 **Open Source Credits & Privacy**: Built-in Open Source Licenses display and offline cache capability.
-
----
-
-## 🛠 Tech Stack & Architecture
-
-TyphoonEye is engineered adhering to **Clean Architecture** and **MVVM** principles with standard Android Jetpack libraries.
-
-- **UI & Navigation**: [Jetpack Compose](https://developer.android.com/jetpack/compose), [Material 3](https://m3.material.io/), Navigation Compose
-- **Map Engine**: [MapLibre Android SDK](https://github.com/maplibre/maplibre-native) (Vector map rendering)
-- **Dependency Injection**: [Hilt](https://dagger.dev/hilt/) (Dagger)
-- **Concurrency & State**: Kotlin Coroutines, StateFlow, SharedFlow
-- **Network**: [Retrofit 2](https://square.github.io/retrofit/), [OkHttp 4](https://square.github.io/okhttp/), Custom Ed25519 JWT Authentication
-- **Persistence & Storage**: [Room Database](https://developer.android.com/training/data-storage/room), [DataStore Preferences](https://developer.android.com/topic/libraries/architecture/datastore)
-- **Background Tasks**: [WorkManager](https://developer.android.com/topic/libraries/architecture/workmanager)
-- **CI/CD Pipeline**: GitHub Actions for automated APK packaging and Release publishing.
+- Interactive **MapLibre** map: history track, forecast track, 7 / 10 / 12-level wind radii by quadrant
+- Typhoon detail: pressure, wind, movement, observation timeline
+- Optional **distance-based emergency alerts** (location permission)
+- Live status notification + background refresh (`WorkManager`)
+- Material 3, dynamic color, light / dark theme
+- Languages: Simplified Chinese, Traditional Chinese, Cantonese, English
+- **Demo / offline cache** when API keys are not configured
+- Two distribution flavors:
+  - `github` — in-app update from GitHub Releases
+  - `fdroid` — updates via F-Droid only (no sideload installer)
 
 ---
 
-## 🚀 Getting Started
+## Tech stack
 
-### Prerequisites
+| Area | Stack |
+|------|--------|
+| UI | Jetpack Compose, Material 3, Navigation |
+| Map | [MapLibre Native Android](https://github.com/maplibre/maplibre-native) |
+| DI | Hilt |
+| Network | Retrofit, OkHttp, optional QWeather JWT (Ed25519) |
+| Storage | Room, DataStore |
+| Background | WorkManager |
+| CI | GitHub Actions |
 
-- Android Studio Ladybug (2024.2.1+) or newer
-- JDK 21
-- Android SDK 36 (minSdk 29)
-
-### Building from Source
-
-1. Clone the repository:
-   ```bash
-   git clone https://github.com/Seamain/TyphoonEyeAndroid.git
-   cd TyphoonEyeAndroid
-   ```
-
-2. (Optional) Configure QWeather API Keys:
-   Copy `local.properties.example` to `local.properties` and add your API credentials:
-   ```properties
-   QWEATHER_API_KEY=your_qweather_api_key
-   QWEATHER_KID=your_key_id
-   QWEATHER_PROJECT_ID=your_project_id
-   QWEATHER_PRIVATE_KEY=your_private_key
-   ```
-   *(Note: The app will run in Demo/Offline mode if no API key is provided)*
-
-3. Build and install:
-   ```bash
-   ./gradlew assembleDebug
-   ```
+Architecture: **MVVM + clean-ish layering** (UI → ViewModel → repository → remote/local).
 
 ---
 
-## 🤖 Continuous Integration & Releases
+## Requirements
 
-Automated builds are configured via **GitHub Actions** (`.github/workflows/build-apk.yml`).
-
-- **Artifacts**: Every push to `main` generates a downloadable Debug APK.
-- **Releases**: Creating a Git tag (e.g. `v1.0.0`) automatically compiles a Release APK, writes that tag into `versionName` (and commit count into `versionCode`), extracts the latest Git Changelog, and publishes it to [GitHub Releases](https://github.com/Seamain/TyphoonEyeAndroid/releases).
+- Android Studio Ladybug (2024.2+) or newer  
+- JDK **21**  
+- Android SDK **36** (minSdk **29**)
 
 ---
 
-## 📄 License
+## Build
 
-This project is licensed under the Apache License 2.0. See the [LICENSE](LICENSE) file for details.
+```bash
+git clone https://github.com/Seamain/TyphoonEyeAndroid.git
+cd TyphoonEyeAndroid
+```
+
+### Optional API keys
+
+Copy the example file and fill only what you need:
+
+```bash
+cp local.properties.example local.properties
+```
+
+| Key | Purpose |
+|-----|---------|
+| `JUHE_KEY` | Juhe typhoon list / detail (optional) |
+| `QWEATHER_API_KEY` or JWT fields | QWeather typhoon + warnings (optional) |
+| `AMAP_KEY` | Amap raster basemap in mainland China (optional) |
+
+Without keys the app still installs and runs with **demo / cached** data.
+
+See [local.properties.example](local.properties.example) and [PRIVACY.md](PRIVACY.md).
+
+### Gradle targets
+
+```bash
+# Default GitHub channel (debug)
+./gradlew assembleGithubDebug
+
+# Release (GitHub channel, signed if keystore is configured)
+./gradlew assembleGithubRelease
+
+# F-Droid channel (no GitHub in-app updates)
+./gradlew assembleFdroidRelease
+```
+
+### Versioning
+
+Release numbers live in [`version.properties`](version.properties):
+
+```properties
+VERSION_NAME=1.2.0
+VERSION_CODE=15
+```
+
+CI may override via `VERSION_NAME` / `VERSION_CODE` env vars. Tag releases as `v1.2.0`.
+
+---
+
+## Releases & CI
+
+Workflow: [`.github/workflows/build-apk.yml`](.github/workflows/build-apk.yml)
+
+- Push / PR → build artifacts  
+- Tag `v*` → GitHub Release + `github` flavor APK  
+
+Secrets used by CI (repository settings): API keys (optional), release keystore (optional).
+
+---
+
+## F-Droid
+
+- App source remains on **GitHub**
+- Packaging draft: [`metadata/seamain.org.typhoonEye.yml`](metadata/seamain.org.typhoonEye.yml)
+- Submit packaging via GitLab **[fdroiddata](https://gitlab.com/fdroid/fdroiddata)** MR (metadata only)
+- Flavor: `fdroid` · AntiFeature: `NonFreeNet` (third-party weather / optional Amap tiles)
+
+Checklist (CN): [README_CN.md](README_CN.md#f-droid-投稿说明)
+
+---
+
+## Privacy
+
+- No ads, no analytics SDKs  
+- Location is used **only** for optional distance alerts and is not uploaded to a TyphoonEye server  
+- Weather requests go to third-party APIs you configure  
+
+Full text: [PRIVACY.md](PRIVACY.md)
+
+---
+
+## Contributing
+
+Issues and pull requests are welcome.
+
+1. Fork + branch from `foss` or `master`  
+2. Keep changes focused; match existing style  
+3. Do **not** commit `local.properties`, keystores, or real API keys  
+4. Prefer `./gradlew test` before opening a PR  
+
+---
+
+## License
+
+[Apache License 2.0](LICENSE)
+
+Map data/providers and weather APIs remain under their own terms.

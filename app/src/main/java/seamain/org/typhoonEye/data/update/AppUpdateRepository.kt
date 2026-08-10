@@ -15,6 +15,7 @@ import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import seamain.org.typhoonEye.BuildConfig
+import seamain.org.typhoonEye.DistributionConfig
 import seamain.org.typhoonEye.R
 import seamain.org.typhoonEye.data.api.GitHubReleaseApi
 import seamain.org.typhoonEye.data.api.GitHubReleaseDto
@@ -46,6 +47,10 @@ class AppUpdateRepository @Inject constructor(
      * @param force ignore daily throttle used by background auto-check
      */
     suspend fun checkForUpdate(force: Boolean = true): AppUpdateState {
+        if (!DistributionConfig.enableInAppUpdates(appContext)) {
+            _state.value = AppUpdateState.Idle
+            return _state.value
+        }
         if (!force && !preferences.shouldAutoCheckUpdate()) {
             return _state.value
         }
@@ -156,6 +161,13 @@ class AppUpdateRepository @Inject constructor(
     }
 
     suspend fun downloadUpdate(info: AppUpdateInfo): AppUpdateState {
+        if (!DistributionConfig.enableInAppUpdates(appContext)) {
+            val err = AppUpdateState.Error(
+                appContext.getString(R.string.update_error_disabled_fdroid)
+            )
+            _state.value = err
+            return err
+        }
         _state.value = AppUpdateState.Downloading(info, 0)
         return try {
             val file = withContext(Dispatchers.IO) {

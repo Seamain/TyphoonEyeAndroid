@@ -1,15 +1,60 @@
-*.iml
-.gradle
-/local.properties
-/.idea/caches
-/.idea/libraries
-/.idea/modules.xml
-/.idea/workspace.xml
-/.idea/navEditor.xml
-/.idea/assetWizardSettings.xml
-.DS_Store
-/build
-/captures
-.externalNativeBuild
-.cxx
+# Built application files
+*.apk
+*.ap_
+*.aab
+
+# Built bundle files
+*.dex
+*.class
+
+# Generated files
+bin/
+gen/
+out/
+release/
+
+# Gradle
+.gradle/
+build/
+**/build/
+
+# Local configuration (SDK path, API keys — never commit)
 local.properties
+*.local.properties
+
+# Signing
+*.jks
+*.keystore
+release.keystore
+keystore.properties
+
+# Android Studio / IntelliJ
+*.iml
+.idea/
+.navigation/
+captures/
+output.json
+
+# macOS
+.DS_Store
+
+# Kotlin
+.kotlin/
+
+# Native
+.externalNativeBuild/
+.cxx/
+
+# Log / temp
+*.log
+*.tmp
+*.swp
+*~
+
+# Packaging scratch
+fdroid-build/
+output_apks/
+
+# Env dumps
+.env
+.env.*

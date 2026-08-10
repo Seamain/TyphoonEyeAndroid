@@ -149,6 +149,7 @@
     <string name="update_error_network">網絡唔得，檢查連線再試</string>
     <string name="update_error_download_failed">下載失敗，檢查網絡再試</string>
     <string name="update_error_apk_missing">安裝包唔見咗，請重新下載</string>
+    <string name="update_error_disabled_fdroid">呢個版本請用 F-Droid 更新。</string>
     <string name="language_title">App 語言</string>
     <string name="language_subtitle">預設跟系統；主畫面 App 名會一齊轉</string>
     <string name="language_system">跟系統</string>

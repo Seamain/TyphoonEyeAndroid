@@ -85,6 +85,7 @@ fun SettingsScreen(
     onRequestNotificationPermission: () -> Unit,
     onRequestLocationPermission: () -> Unit,
     onOpenLicenses: () -> Unit = {},
+    inAppUpdatesEnabled: Boolean = true,
     onCheckForUpdates: () -> Unit = {},
     isCheckingUpdates: Boolean = false,
     modifier: Modifier = Modifier
@@ -445,46 +446,48 @@ fun SettingsScreen(
                     },
                     colors = ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.surface)
                 )
-                SettingsDivider()
-                ListItem(
-                    headlineContent = { Text(stringResource(R.string.check_for_updates)) },
-                    supportingContent = {
-                        Text(
-                            if (isCheckingUpdates) {
-                                stringResource(R.string.update_checking)
-                            } else {
-                                stringResource(R.string.check_for_updates_subtitle)
-                            }
-                        )
-                    },
-                    leadingContent = {
-                        Icon(
-                            Icons.Outlined.SystemUpdate,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    },
-                    trailingContent = {
-                        if (isCheckingUpdates) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(22.dp),
-                                strokeWidth = 2.dp
+                if (inAppUpdatesEnabled) {
+                    SettingsDivider()
+                    ListItem(
+                        headlineContent = { Text(stringResource(R.string.check_for_updates)) },
+                        supportingContent = {
+                            Text(
+                                if (isCheckingUpdates) {
+                                    stringResource(R.string.update_checking)
+                                } else {
+                                    stringResource(R.string.check_for_updates_subtitle)
+                                }
                             )
-                        } else {
+                        },
+                        leadingContent = {
                             Icon(
-                                Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                                Icons.Outlined.SystemUpdate,
                                 contentDescription = null,
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant
                             )
-                        }
-                    },
-                    colors = ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.surface),
-                    modifier = Modifier
-                        .clickable(enabled = !isCheckingUpdates, onClick = onCheckForUpdates)
-                        .semantics {
-                            contentDescription = context.getString(R.string.cd_check_for_updates)
-                        }
-                )
+                        },
+                        trailingContent = {
+                            if (isCheckingUpdates) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(22.dp),
+                                    strokeWidth = 2.dp
+                                )
+                            } else {
+                                Icon(
+                                    Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        },
+                        colors = ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.surface),
+                        modifier = Modifier
+                            .clickable(enabled = !isCheckingUpdates, onClick = onCheckForUpdates)
+                            .semantics {
+                                contentDescription = context.getString(R.string.cd_check_for_updates)
+                            }
+                    )
+                }
                 SettingsDivider()
                 ListItem(
                     headlineContent = { Text(stringResource(R.string.open_source_licenses)) },

@@ -14,6 +14,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import seamain.org.typhoonEye.DistributionConfig
 import seamain.org.typhoonEye.R
 import seamain.org.typhoonEye.data.location.LocationProvider
 import seamain.org.typhoonEye.data.preferences.AppLanguage
@@ -138,9 +139,11 @@ class TyphoonViewModel @Inject constructor(
 
     init {
         refresh()
-        // Quiet daily GitHub Releases check (no dialog spam if already up to date).
-        viewModelScope.launch {
-            runCatching { appUpdateRepository.checkForUpdate(force = false) }
+        // Quiet daily GitHub Releases check (disabled on F-Droid flavor).
+        if (DistributionConfig.enableInAppUpdates(appContext)) {
+            viewModelScope.launch {
+                runCatching { appUpdateRepository.checkForUpdate(force = false) }
+            }
         }
         viewModelScope.launch {
             combine(_allTyphoons, preferences.settings) { typhoons, prefs ->

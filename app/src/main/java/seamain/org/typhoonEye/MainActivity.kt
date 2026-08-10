@@ -67,6 +67,7 @@ import seamain.org.typhoonEye.ui.screens.HomeScreen
 import seamain.org.typhoonEye.ui.screens.SettingsScreen
 import seamain.org.typhoonEye.ui.theme.Motion
 import seamain.org.typhoonEye.ui.theme.TyphoonEyeTheme
+import seamain.org.typhoonEye.ui.util.formatObservationTime
 
 private val LOCATION_PERMISSIONS = arrayOf(
     Manifest.permission.ACCESS_COARSE_LOCATION,
@@ -150,13 +151,25 @@ fun TyphoonApp(
     val isRefreshing by viewModel.isRefreshing.collectAsStateWithLifecycle()
     val query by viewModel.query.collectAsStateWithLifecycle()
     val intensityFilter by viewModel.intensityFilter.collectAsStateWithLifecycle()
-    val lastUpdated by viewModel.lastUpdated.collectAsStateWithLifecycle()
+    val lastUpdatedAtMs by viewModel.lastUpdatedAtMs.collectAsStateWithLifecycle()
     val dataMode by viewModel.dataMode.collectAsStateWithLifecycle()
     val settings by viewModel.settings.collectAsStateWithLifecycle()
+    val lastUpdated = remember(lastUpdatedAtMs, settings.appLanguage) {
+        lastUpdatedAtMs?.let { epoch ->
+            val formatted = java.text.SimpleDateFormat(
+                "yyyy-MM-dd HH:mm",
+                java.util.Locale.getDefault()
+            ).format(java.util.Date(epoch))
+            formatObservationTime(formatted)
+        }
+    }
     val userLocation by viewModel.userLocation.collectAsStateWithLifecycle()
     val appUpdateState by viewModel.appUpdateState.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val navController = rememberNavController()
+    val inAppUpdatesEnabled = remember(context) {
+        DistributionConfig.enableInAppUpdates(context)
+    }
 
     var notificationsGranted by remember {
         mutableStateOf(viewModel.canPostLiveNotifications())
@@ -311,25 +324,27 @@ fun TyphoonApp(
         }
     }
 
-    AppUpdateHost(
-        state = appUpdateState,
-        showStatusDialogs = updateStatusDialogs,
-        canInstall = viewModel.canInstallAppPackages(),
-        onDismiss = {
-            viewModel.dismissAppUpdate()
-            updateStatusDialogs = false
-        },
-        onDownload = viewModel::downloadAppUpdate,
-        onInstall = { path ->
-            runCatching { context.startActivity(viewModel.appInstallApkIntent(path)) }
-        },
-        onOpenPermissionSettings = {
-            runCatching { context.startActivity(viewModel.appInstallPermissionIntent()) }
-        },
-        onOpenReleasePage = { info ->
-            runCatching { context.startActivity(viewModel.appReleasePageIntent(info)) }
-        }
-    )
+    if (inAppUpdatesEnabled) {
+        AppUpdateHost(
+            state = appUpdateState,
+            showStatusDialogs = updateStatusDialogs,
+            canInstall = viewModel.canInstallAppPackages(),
+            onDismiss = {
+                viewModel.dismissAppUpdate()
+                updateStatusDialogs = false
+            },
+            onDownload = viewModel::downloadAppUpdate,
+            onInstall = { path ->
+                runCatching { context.startActivity(viewModel.appInstallApkIntent(path)) }
+            },
+            onOpenPermissionSettings = {
+                runCatching { context.startActivity(viewModel.appInstallPermissionIntent()) }
+            },
+            onOpenReleasePage = { info ->
+                runCatching { context.startActivity(viewModel.appReleasePageIntent(info)) }
+            }
+        )
+    }
 
     NavHost(
         navController = navController,
@@ -414,6 +429,7 @@ fun TyphoonApp(
                         launchSingleTop = true
                     }
                 },
+                inAppUpdatesEnabled = inAppUpdatesEnabled,
                 onCheckForUpdates = {
                     updateStatusDialogs = true
                     viewModel.checkForAppUpdate(force = true)
