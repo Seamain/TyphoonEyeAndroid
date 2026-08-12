@@ -1,6 +1,8 @@
+AntiFeatures:
+  - NonFreeNet
 Categories:
-  - Weather
   - Navigation
+  - Weather
 License: Apache-2.0
 AuthorName: Seamain
 WebSite: https://github.com/Seamain/TyphoonEyeAndroid
@@ -8,8 +10,6 @@ SourceCode: https://github.com/Seamain/TyphoonEyeAndroid
 IssueTracker: https://github.com/Seamain/TyphoonEyeAndroid/issues
 
 AutoName: TyphoonEye
-
-# Keep under 80 characters.
 Summary: Real-time typhoon tracking and meteorological map visualization
 Description: |-
   TyphoonEye is a lightweight, open-source real-time typhoon tracking and
@@ -35,17 +35,12 @@ RepoType: git
 Repo: https://github.com/Seamain/TyphoonEyeAndroid.git
 
 Builds:
-  # After tagging the release on GitHub, set commit to that tag (e.g. v1.2.0).
-  # versionName / versionCode must match version.properties in the tagged commit.
   - versionName: 1.2.0
     versionCode: 15
     commit: v1.2.0
     subdir: app
     gradle:
       - fdroid
-
-AntiFeatures:
-  - NonFreeNet
 
 AutoUpdateMode: Version
 UpdateCheckMode: Tags
