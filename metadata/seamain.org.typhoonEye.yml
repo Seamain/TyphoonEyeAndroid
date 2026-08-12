@@ -20,7 +20,7 @@ Binaries:
 Builds:
   - versionName: 1.2.0
     versionCode: 15
-    commit: 3a3e6b61a20b169102d01b7c38ef151755573d9a
+    commit: b915ca2670d330256af07e5891e3a91b68285ac2
     subdir: app
     gradle:
       - fdroid
