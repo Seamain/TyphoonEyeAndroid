@@ -47,7 +47,7 @@ Builds:
 AntiFeatures:
   - NonFreeNet
 
-AutoUpdateMode: Version v%v
+AutoUpdateMode: Version
 UpdateCheckMode: Tags
 UpdateCheckData: version.properties|VERSION_CODE=(\d+)|.|VERSION_NAME=(.*)
 CurrentVersion: 1.2.0
