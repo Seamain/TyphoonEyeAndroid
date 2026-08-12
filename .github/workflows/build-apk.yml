@@ -114,7 +114,8 @@ jobs:
           VERSION_CODE: ${{ env.VERSION_CODE }}
         run: ./gradlew assembleGithubDebug --stacktrace
 
-      - name: Build Release APK
+      # github flavor keeps in-app GitHub updates (for GitHub users).
+      - name: Build Release APK (github flavor)
         if: ${{ inputs.build_type == 'release' || inputs.build_type == '' }}
         env:
           JUHE_KEY: ${{ secrets.JUHE_KEY }}
@@ -122,8 +123,19 @@ jobs:
           JUHEKEY: ${{ secrets.JUHEKEY }}
           VERSION_NAME: ${{ env.VERSION_NAME }}
           VERSION_CODE: ${{ env.VERSION_CODE }}
-        # github flavor keeps in-app GitHub updates; F-Droid builds use assembleFdroidRelease.
         run: ./gradlew assembleGithubRelease --stacktrace
+
+      # fdroid flavor APK is uploaded too so F-Droid's reproducible-build
+      # check can compare against the same binary it builds.
+      - name: Build Release APK (fdroid flavor)
+        if: ${{ inputs.build_type == 'release' || inputs.build_type == '' }}
+        env:
+          JUHE_KEY: ${{ secrets.JUHE_KEY }}
+          JUHE_API_KEY: ${{ secrets.JUHE_API_KEY }}
+          JUHEKEY: ${{ secrets.JUHEKEY }}
+          VERSION_NAME: ${{ env.VERSION_NAME }}
+          VERSION_CODE: ${{ env.VERSION_CODE }}
+        run: ./gradlew assembleFdroidRelease --stacktrace
 
       - name: Process & Rename APK Artifacts
         run: |
@@ -169,5 +181,8 @@ jobs:
           draft: false
           prerelease: false
           generate_release_notes: true
+          # Allow re-running on the same tag (e.g. after CI fixes) to update assets.
+          update_release_body: true
+          update_release_assets: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
