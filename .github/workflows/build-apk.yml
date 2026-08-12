@@ -37,11 +37,13 @@ jobs:
         with:
           fetch-depth: 0
 
+      # Pin the exact JDK patch used by the F-Droid buildserver (openjdk 21.0.12)
+      # so the fdroid-flavor APK is byte-identical for reproducible builds.
       - name: Set up JDK 21
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
-          java-version: '21'
+          java-version: '21.0.12'
           cache: 'gradle'
 
       - name: Grant execute permission for gradlew
@@ -127,15 +129,15 @@ jobs:
 
       # fdroid flavor APK is uploaded too so F-Droid's reproducible-build
       # check can compare against the same binary it builds.
+      # It MUST build in a clean environment identical to F-Droid:
+      #  - no API keys (empty local.properties → empty BuildConfig)
+      #  - no VERSION_NAME/VERSION_CODE env (falls back to version.properties)
       - name: Build Release APK (fdroid flavor)
         if: ${{ inputs.build_type == 'release' || inputs.build_type == '' }}
-        env:
-          JUHE_KEY: ${{ secrets.JUHE_KEY }}
-          JUHE_API_KEY: ${{ secrets.JUHE_API_KEY }}
-          JUHEKEY: ${{ secrets.JUHEKEY }}
-          VERSION_NAME: ${{ env.VERSION_NAME }}
-          VERSION_CODE: ${{ env.VERSION_CODE }}
-        run: ./gradlew assembleFdroidRelease --stacktrace
+        run: |
+          > local.properties
+          echo "sdk.dir=$ANDROID_HOME" >> local.properties
+          ./gradlew assembleFdroidRelease --stacktrace
 
       - name: Process & Rename APK Artifacts
         run: |

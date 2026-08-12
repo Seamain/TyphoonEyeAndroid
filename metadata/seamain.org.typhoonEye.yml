@@ -14,7 +14,8 @@ AutoName: 台风眼
 
 RepoType: git
 Repo: https://github.com/Seamain/TyphoonEyeAndroid.git
-Binaries: https://github.com/Seamain/TyphoonEyeAndroid/releases/download/v%v/TyphoonEye-v%v-app-fdroid-release.apk
+Binaries:
+  https://github.com/Seamain/TyphoonEyeAndroid/releases/download/v%v/TyphoonEye-v%v-app-fdroid-release.apk
 
 Builds:
   - versionName: 1.2.0
