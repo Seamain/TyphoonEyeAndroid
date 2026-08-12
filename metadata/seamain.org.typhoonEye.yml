@@ -36,7 +36,7 @@ Repo: https://github.com/Seamain/TyphoonEyeAndroid.git
 Builds:
   - versionName: 1.2.0
     versionCode: 15
-    commit: fe282a5688d5464d2d3d279568b2ab54a3bc5fb6
+    commit: 3a3e6b61a20b169102d01b7c38ef151755573d9a
     subdir: app
     gradle:
       - fdroid
