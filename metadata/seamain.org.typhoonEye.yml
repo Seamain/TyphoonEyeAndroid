@@ -10,7 +10,6 @@ SourceCode: https://github.com/Seamain/TyphoonEyeAndroid
 IssueTracker: https://github.com/Seamain/TyphoonEyeAndroid/issues
 
 AutoName: TyphoonEye
-Summary: Real-time typhoon tracking and meteorological map visualization
 Description: |-
   TyphoonEye is a lightweight, open-source real-time typhoon tracking and
   weather alert application for Android.
