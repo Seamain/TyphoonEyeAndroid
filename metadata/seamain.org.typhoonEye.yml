@@ -41,6 +41,10 @@ Builds:
     gradle:
       - fdroid
 
+# Reproducible-build check: same APK signature as GitHub release binaries.
+Binaries: https://github.com/Seamain/TyphoonEyeAndroid/releases/download/v%v/TyphoonEye-v%v-app-github-release.apk
+AllowedAPKSigningKeys: b7d11c3c8a02bb7228b94bdc8643ec358eef029e38c0588ce0a817a93302ea40
+
 AutoUpdateMode: Version
 UpdateCheckMode: Tags
 UpdateCheckData: version.properties|VERSION_CODE=(\d+)|.|VERSION_NAME=(.*)
