@@ -130,13 +130,37 @@ jobs:
       # fdroid flavor APK is uploaded too so F-Droid's reproducible-build
       # check can compare against the same binary it builds.
       # It MUST build in a clean environment identical to F-Droid:
-      #  - no API keys (empty local.properties → empty BuildConfig)
-      #  - no VERSION_NAME/VERSION_CODE env (falls back to version.properties)
+      #  - no API keys (empty BuildConfig strings)
+      #  - no VERSION_NAME/VERSION_CODE (GITHUB_ENV would otherwise leak
+      #    git-rev-list as versionCode, which F-Droid does not set)
+      #  - keep only sdk.dir + release signing so the APK matches AllowedAPKSigningKeys
       - name: Build Release APK (fdroid flavor)
         if: ${{ inputs.build_type == 'release' || inputs.build_type == '' }}
+        env:
+          VERSION_NAME: ''
+          VERSION_CODE: ''
+          JUHE_KEY: ''
+          JUHE_API_KEY: ''
+          JUHEKEY: ''
+          QWEATHER_API_KEY: ''
+          QWEATHER_KID: ''
+          QWEATHER_PROJECT_ID: ''
+          QWEATHER_PRIVATE_KEY: ''
+          QWEATHER_HOST: ''
+          AMAP_KEY: ''
+          MAPLIBRE_STYLE_URL: ''
+          MAP_BASEMAP: ''
         run: |
-          > local.properties
-          echo "sdk.dir=$ANDROID_HOME" >> local.properties
+          {
+            echo "sdk.dir=$ANDROID_HOME"
+            if [ -f release.keystore ]; then
+              echo "RELEASE_STORE_FILE=release.keystore"
+              echo "RELEASE_STORE_PASSWORD=${{ secrets.RELEASE_STORE_PASSWORD }}"
+              echo "RELEASE_KEY_ALIAS=${{ secrets.RELEASE_KEY_ALIAS }}"
+              echo "RELEASE_KEY_PASSWORD=${{ secrets.RELEASE_KEY_PASSWORD }}"
+            fi
+          } > local.properties
+          ./gradlew --stop || true
           ./gradlew assembleFdroidRelease --stacktrace
 
       - name: Process & Rename APK Artifacts

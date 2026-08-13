@@ -227,6 +227,11 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            // Git checkout shape differs between GitHub Actions and F-Droid;
+            // embedding VCS info makes AndroidManifest/APK unreproducible.
+            vcsInfo {
+                include = false
+            }
         }
     }
     compileOptions {
