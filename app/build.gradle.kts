@@ -253,6 +253,13 @@ android {
             excludes += "META-INF/version-control-info.textproto"
         }
     }
+
+    // AGP 8+ embeds a "Dependency metadata" APK signing block for Play.
+    // F-Droid's check-apk scanner rejects that extra block.
+    dependenciesInfo {
+        includeInApk = false
+        includeInBundle = false
+    }
 }
 
 // AGP 8+ always merges ART baseline profiles from androidx AARs.
