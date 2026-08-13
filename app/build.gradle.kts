@@ -247,6 +247,20 @@ android {
         unitTests.isReturnDefaultValues = true
         unitTests.isIncludeAndroidResources = true
     }
+
+    packaging {
+        resources {
+            excludes += "META-INF/version-control-info.textproto"
+        }
+    }
+}
+
+// AGP 8+ always merges ART baseline profiles from androidx AARs.
+// Disable those tasks so F-Droid and GitHub APKs both omit baseline.prof.
+tasks.configureEach {
+    if (name.contains("ArtProfile")) {
+        enabled = false
+    }
 }
 
 kotlin {
