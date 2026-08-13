@@ -14,12 +14,13 @@ AutoName: 台风眼
 
 RepoType: git
 Repo: https://github.com/Seamain/TyphoonEyeAndroid.git
-Binaries: https://github.com/Seamain/TyphoonEyeAndroid/releases/download/v%v/TyphoonEye-v%v-app-fdroid-release.apk
+Binaries: 
+  https://github.com/Seamain/TyphoonEyeAndroid/releases/download/v%v/TyphoonEye-v%v-app-fdroid-release.apk
 
 Builds:
   - versionName: 1.2.0
     versionCode: 15
-    commit: b915ca2670d330256af07e5891e3a91b68285ac2
+    commit: e78b0dd6fae61479bf2e00e21f7729088cc274df
     subdir: app
     gradle:
       - fdroid
