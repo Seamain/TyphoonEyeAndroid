@@ -16,6 +16,13 @@ val localProperties = Properties().apply {
     }
 }
 
+val versionProperties = Properties().apply {
+    val versionFile = rootProject.file("version.properties")
+    if (versionFile.exists()) {
+        load(versionFile.inputStream())
+    }
+}
+
 fun String.asBuildConfigLiteral(): String =
     "\"" + replace("\\", "\\\\")
         .replace("\"", "\\\"")
@@ -50,15 +57,18 @@ fun stripVersionPrefix(raw: String): String =
 /**
  * versionName resolution (first hit wins):
  * 1. VERSION_NAME env / local.properties (CI tag injection)
- * 2. Nearest GitHub-style tag via `git describe --match v*`
- * 3. Fallback for fresh checkouts without tags
- *
- * Examples: tag `v1.1.0` → `1.1.0`; 3 commits later → `1.1.0-3-gabc1234`
+ * 2. Root version.properties (release pin)
+ * 3. Nearest GitHub-style tag via `git describe --match v*`
+ * 4. Fallback for fresh checkouts without tags
  */
 fun resolveVersionName(): String {
     val override = localProperties.getProperty("VERSION_NAME")?.takeIf { it.isNotBlank() }
         ?: System.getenv("VERSION_NAME")?.takeIf { it.isNotBlank() }
     if (override != null) return stripVersionPrefix(override)
+
+    versionProperties.getProperty("VERSION_NAME")?.takeIf { it.isNotBlank() }?.let {
+        return stripVersionPrefix(it)
+    }
 
     val describe = runGit("describe", "--tags", "--match", "v*", "--dirty")
         ?: runGit("describe", "--tags", "--dirty")
@@ -71,13 +81,18 @@ fun resolveVersionName(): String {
 /**
  * versionCode resolution (first hit wins):
  * 1. VERSION_CODE env / local.properties
- * 2. Monotonic `git rev-list --count HEAD` (safe for side-loading / Play uploads)
- * 3. Encoded semver core from versionName
+ * 2. Root version.properties
+ * 3. Monotonic `git rev-list --count HEAD`
+ * 4. Encoded semver core from versionName
  */
 fun resolveVersionCode(versionName: String): Int {
     val override = localProperties.getProperty("VERSION_CODE")?.toIntOrNull()?.takeIf { it > 0 }
         ?: System.getenv("VERSION_CODE")?.toIntOrNull()?.takeIf { it > 0 }
     if (override != null) return override
+
+    versionProperties.getProperty("VERSION_CODE")?.toIntOrNull()?.takeIf { it > 0 }?.let {
+        return it
+    }
 
     runGit("rev-list", "--count", "HEAD")?.toIntOrNull()?.takeIf { it > 0 }?.let { return it }
 
@@ -122,7 +137,8 @@ android {
             "String",
             "QWEATHER_HOST",
             (localProperties.getProperty("QWEATHER_HOST")?.takeIf { it.isNotBlank() }
-                ?: "https://pu6yvrgfbv.re.qweatherapi.com/").asBuildConfigLiteral()
+                ?: System.getenv("QWEATHER_HOST")?.takeIf { it.isNotBlank() }
+                ?: "https://devapi.qweather.com/").asBuildConfigLiteral()
         )
         // Empty = bundled asset://map_style.json (Carto raster). Override if needed.
         buildConfigField(
@@ -194,6 +210,9 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            vcsInfo {
+                include = false
+            }
         }
     }
     compileOptions {
@@ -208,6 +227,11 @@ android {
     testOptions {
         unitTests.isReturnDefaultValues = true
         unitTests.isIncludeAndroidResources = true
+    }
+
+    dependenciesInfo {
+        includeInApk = false
+        includeInBundle = false
     }
 }
 
