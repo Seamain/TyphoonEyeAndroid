@@ -1,5 +1,8 @@
 AntiFeatures:
-  - NonFreeNet
+  NonFreeNet:
+    en-US: Live typhoon tracks and weather alerts rely on the non-free Juhe and QWeather
+      network services.
+    zh-CN: 实时台风路径和气象预警依赖聚合数据及和风天气的非自由网络服务。
 Categories:
   - Navigation
   - Weather
@@ -14,7 +17,7 @@ AutoName: 台风眼
 
 RepoType: git
 Repo: https://github.com/Seamain/TyphoonEyeAndroid.git
-Binaries: 
+Binaries:
   https://github.com/Seamain/TyphoonEyeAndroid/releases/download/v%v/TyphoonEye-v%v-app-fdroid-release.apk
 
 Builds:

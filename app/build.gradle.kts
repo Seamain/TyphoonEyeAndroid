@@ -248,7 +248,24 @@ android {
         unitTests.isIncludeAndroidResources = true
     }
 
+    // Per-ABI APKs: each APK ships only one architecture's native libs.
+    // Drops universal APK (~53 MB) to ~7 MB per ABI.
+    splits {
+        abi {
+            isEnable = true
+            reset()
+            include("armeabi-v7a", "arm64-v8a", "x86", "x86_64")
+            isUniversalApk = false
+        }
+    }
+
     packaging {
+        // Compress native .so files inside the APK (legacy behaviour).
+        // Default AGP 8+ stores them PAGE-aligned & uncompressed for mmap,
+        // but that inflates the APK. Legacy packaging yields ~7 MB per ABI.
+        jniLibs {
+            useLegacyPackaging = true
+        }
         resources {
             excludes += "META-INF/version-control-info.textproto"
         }
@@ -259,6 +276,26 @@ android {
     dependenciesInfo {
         includeInApk = false
         includeInBundle = false
+    }
+}
+
+// Assign each ABI split a unique versionCode so update managers (F-Droid,
+// GitHub Releases, device package installer) can distinguish APKs and prefer
+// the correct one.  arm64 gets the highest code so 64-bit devices always win.
+val abiVersionCodes = mapOf(
+    "armeabi-v7a" to 1,
+    "arm64-v8a" to 2,
+    "x86" to 3,
+    "x86_64" to 4,
+)
+
+android.applicationVariants.configureEach {
+    outputs.configureEach {
+        val output = this as com.android.build.gradle.internal.api.ApkVariantOutputImpl
+        val abi = output.getFilter("ABI")
+        if (abi != null) {
+            output.versionCodeOverride = (abiVersionCodes[abi] ?: 0) * 1_000_000 + appVersionCode
+        }
     }
 }
 
