@@ -17,8 +17,9 @@ AutoName: 台风眼
 
 RepoType: git
 Repo: https://github.com/Seamain/TyphoonEyeAndroid.git
-Binaries:
-  https://github.com/Seamain/TyphoonEyeAndroid/releases/download/v%v/TyphoonEye-v%v-app-fdroid-release.apk
+# Binaries verification removed: ABI splits produce per-ABI APKs
+# (app-fdroid-arm64-v8a-release.apk, etc.) that don't match a single URL pattern.
+# F-Droid builds from source and auto-detects splits from build.gradle.kts.
 
 Builds:
   - versionName: 1.2.0
